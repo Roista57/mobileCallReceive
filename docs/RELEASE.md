@@ -89,6 +89,10 @@ Get-FileHash .\CallReceiver-win-x64-v1.0.0.zip -Algorithm SHA256
 
 ## 실패한 작업 다시 실행하기
 
+Android API 37의 SDK 저장소 패키지 ID는 `platforms;android-37.0`입니다. 앱의 `compileSdk`와 `targetSdk`는 정수 `37`을 그대로 사용합니다. CI와 Release는 같은 SDK 패키지와 Build Tools `36.0.0`을 설치하고 `android.jar` 및 `apksigner`가 존재하는지 확인합니다. `Failed to find package 'platforms;android-37'` 오류는 서명 Secret 문제가 아니라 설치 패키지 이름 오류입니다.
+
+워크플로 파일을 수정한 경우에는 변경을 커밋·push해 새 CI를 실행해야 합니다. 기존 실행의 재실행은 기존 커밋을 사용하므로 새 수정이 적용되지 않습니다. Release 태그도 수정된 커밋을 가리켜야 합니다. 이미 공개한 버전은 새 버전으로 배포하고, 아직 공개하지 않은 실패한 태그만 상태 확인 후 다시 생성합니다.
+
 GitHub 저장소의 **Actions → Release → 실패한 실행 → Re-run failed jobs**를 선택합니다. 빌드가 실패하면 공개 Release를 만들지 않습니다. 파일 업로드 또는 첨부 확인 중 실패해 남은 draft Release는 같은 작업을 재실행할 때 새 draft로 다시 만들어집니다. 이미 공개된 같은 태그의 Release는 자동으로 덮어쓰지 않습니다.
 
 태그와 버전이 다르면 잘못 만든 태그를 원격과 로컬에서 삭제한 뒤 올바른 커밋에 다시 만듭니다. 이미 공개된 Release가 있다면 자동화가 이를 변경하지 않으므로 GitHub에서 상태를 먼저 확인합니다.

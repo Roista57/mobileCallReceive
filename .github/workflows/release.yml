@@ -91,7 +91,10 @@ jobs:
           }
           echo "ANDROID_HOME=$sdk_root" >> "$GITHUB_ENV"
           echo "ANDROID_SDK_ROOT=$sdk_root" >> "$GITHUB_ENV"
-          "$sdkmanager" "platforms;android-37" "build-tools;36.0.0"
+          # API 37's repository package ID includes the minor version.
+          "$sdkmanager" --sdk_root="$sdk_root" "platforms;android-37.0" "build-tools;36.0.0"
+          test -s "$sdk_root/platforms/android-37.0/android.jar"
+          test -x "$sdk_root/build-tools/36.0.0/apksigner"
 
       - name: Restore release keystore
         shell: bash
@@ -135,7 +138,9 @@ jobs:
           apk="app/build/outputs/apk/release/app-release.apk"
           test -f "$apk"
           "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs "$apk"
-          badging="$($ANDROID_HOME/build-tools/36.0.0/aapt dump badging "$apk" | head -n 1)"
+          # Read the complete output: head can cause aapt to fail with SIGPIPE under pipefail.
+          badging="$("$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging "$apk")"
+          badging="${badging%%$'\n'*}"
           echo "$badging"
           [[ "$badging" == *"name='net.onebell.mcs'"* ]]
           [[ "$badging" == *"versionCode='$EXPECTED_VERSION_CODE'"* ]]
