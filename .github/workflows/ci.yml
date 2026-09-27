@@ -14,7 +14,27 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      android: ${{ steps.filter.outputs.android }}
+      windows: ${{ steps.filter.outputs.windows }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          fetch-depth: 0
+      - name: Test CI selection rules
+        run: python3 -m unittest discover -s .github/scripts -p 'test_ci.py'
+      - name: Select platform builds
+        id: filter
+        run: python3 .github/scripts/ci_changes.py
+
   android:
+    needs: changes
+    if: needs.changes.outputs.android == 'true'
     name: Android debug
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -58,6 +78,8 @@ jobs:
         run: bash ./gradlew --no-daemon :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
 
   windows:
+    needs: changes
+    if: needs.changes.outputs.windows == 'true'
     name: Windows Release build
     runs-on: windows-latest
     timeout-minutes: 30
@@ -75,3 +97,17 @@ jobs:
 
       - name: Run non-desktop tests
         run: dotnet test CallReceiver/CallReceiver.slnx --configuration Release --no-build --filter "Category!=Desktop"
+
+  result:
+    name: CI result
+    needs: [changes, android, windows]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - name: Check required results
+        env:
+          CI_NEEDS: ${{ toJSON(needs) }}
+        run: python3 .github/scripts/ci_result.py
