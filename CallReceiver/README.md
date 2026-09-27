@@ -28,4 +28,6 @@ dotnet publish CallReceiver\CallReceiver.csproj -c Release -r win-x64 --self-con
 
 배포 실행 파일은 `artifacts\win-x64\CallReceiver.exe`입니다.
 
+정식 배포본은 버전 태그로 자동 생성합니다. 배포 키와 GitHub Secrets 등록, 버전 변경 및 태그 생성 방법은 [GitHub Release 배포 안내](../docs/RELEASE.md)를 따릅니다.
+
 방화벽은 앱이 변경하지 않습니다. LAN 수신이 필요하면 개인 네트워크의 LocalSubnet만 허용하는 규칙을 직접 추가합니다.

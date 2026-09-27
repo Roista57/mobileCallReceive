@@ -20,3 +20,5 @@ Android 10 이상 스마트폰에서 수신 전화 정보를 같은 LAN의 Windo
 ```
 
 APK는 `app\build\outputs\apk\debug\app-debug.apk`에 생성됩니다. 실전화, 화면 OFF, 제조사 절전 정책과 LAN 방화벽은 실제 장비에서 별도로 확인해야 합니다.
+
+설치용 서명 APK는 버전 태그로 자동 생성합니다. 배포 키와 GitHub Secrets 등록, 버전 변경 및 태그 생성 방법은 [GitHub Release 배포 안내](../docs/RELEASE.md)를 따릅니다.

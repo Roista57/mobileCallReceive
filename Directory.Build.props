@@ -1,0 +1,15 @@
+<Project>
+  <PropertyGroup>
+    <RepositoryVersionFile>$(MSBuildThisFileDirectory)version.properties</RepositoryVersionFile>
+    <RepositoryVersion>$([System.Text.RegularExpressions.Regex]::Match($([System.IO.File]::ReadAllText('$(RepositoryVersionFile)')), '(?m)^versionName=([0-9]+\.[0-9]+\.[0-9]+)\s*$').Groups[1].Value)</RepositoryVersion>
+    <Version>$(RepositoryVersion)</Version>
+    <AssemblyVersion>$(RepositoryVersion).0</AssemblyVersion>
+    <FileVersion>$(RepositoryVersion).0</FileVersion>
+    <InformationalVersion>$(RepositoryVersion)</InformationalVersion>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+  </PropertyGroup>
+
+  <Target Name="ValidateRepositoryVersion" BeforeTargets="PrepareForBuild">
+    <Error Condition="'$(RepositoryVersion)' == ''" Text="version.properties의 versionName을 읽을 수 없습니다." />
+  </Target>
+</Project>

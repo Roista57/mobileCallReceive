@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- The paired Windows receiver is an HTTP server on the user's private LAN. -->
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>

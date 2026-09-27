@@ -17,6 +17,7 @@ namespace CallReceiver.Tests;
 public sealed class DesktopCollection { }
 
 [Collection("Desktop")]
+[Trait("Category", "Desktop")]
 public sealed class WpfUiTests
 {
     [DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
