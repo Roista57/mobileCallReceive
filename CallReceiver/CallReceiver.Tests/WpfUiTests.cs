@@ -50,7 +50,10 @@ public sealed class WpfUiTests
         while (!ready()) await Task.Delay(20, timeout.Token);
     }
 
-    [Fact] public Task FullWpfHttpPathPopupFocusTimingAndHiddenWindow() => OnSta(async () =>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public Task FullWpfHttpPathPopupFocusTimingAndHiddenWindow(bool isTest) => OnSta(async () =>
     {
         await using var f = new HttpFixture();
         await f.StartAsync();
@@ -82,11 +85,13 @@ public sealed class WpfUiTests
             await WaitUntil(() => !model.IsBusy);
             Assert.Contains("HTTP 서버 정상", model.Message);
             var stopwatch = Stopwatch.StartNew();
-            var received = CallEvent.Test();
+            var received = CallEvent.Test() with { IsTest = isTest };
             Assert.Equal(received.EventId, await new HttpSelfTest().SendAsync(initial, received));
             await WaitUntil(() => OpenWindows<CallPopupWindow>().Length == 1);
             var popup = Assert.Single(OpenWindows<CallPopupWindow>());
-            Assert.EndsWith(" 01012345678", popup.Title);
+            var expectedTitle = $"{received.ReceivedAt.ToLocalTime().ToString(initial.TimeFormat)} {received.PhoneNumber}";
+            Assert.Equal(expectedTitle, popup.Title);
+            Assert.Equal(expectedTitle, ((System.Windows.Controls.TextBlock)popup.FindName("TitleText")).Text);
             Assert.False(popup.ShowInTaskbar);
             Assert.False(popup.ShowActivated);
             Assert.True(popup.Topmost);
