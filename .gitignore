@@ -1,0 +1,73 @@
+# Shared repository: Android (mobileCallReceive) + WPF (CallReceiver)
+
+# OS files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Local IDE settings
+.idea/
+.vs/
+.vscode/
+*.iml
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Android / Gradle / Kotlin generated files
+.gradle/
+.kotlin/
+build/
+captures/
+.externalNativeBuild/
+.cxx/
+local.properties
+*.apk
+*.aab
+*.apks
+
+# Local signing keys and secrets
+*.jks
+*.keystore
+*.pfx
+*.p12
+keystore.properties
+signing.properties
+.env
+.env.*
+!.env.example
+!.env.sample
+
+# .NET build and test output
+bin/
+obj/
+TestResults/
+*.trx
+*.coverage
+*.coveragexml
+*.nupkg
+*.snupkg
+*.pubxml.user
+
+
+# Generated deployment packages (attach to Releases instead of committing)
+artifacts/
+/release-files/
+/CallReceiver-win-x64-*.zip
+
+# Runtime configuration and local data; settings.example.json can be tracked
+settings.json
+settings.json.*
+config-location.json
+config-location.json.*
+events.sqlite3
+events.sqlite3-*
+
+# Logs and temporary files
+*.log
+*.tmp
+*.temp
+*.bak
+
+# Keep Gradle Wrapper, source, project files and CI workflows tracked.

@@ -1,0 +1,89 @@
+<Window x:Class="CallReceiver.Views.MainWindow"
+ xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+ xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+ Title="전화 수신 알림" Width="820" Height="720" MinWidth="680" MinHeight="560"
+ WindowStartupLocation="CenterScreen">
+ <DockPanel Margin="12">
+  <StackPanel DockPanel.Dock="Bottom" Margin="0,8,0,0">
+   <TextBlock Text="{Binding DirtyText}" TextWrapping="Wrap"/>
+   <TextBlock Text="{Binding Message}" TextWrapping="Wrap"/>
+   <TextBlock Text="{Binding LastError, StringFormat=마지막 오류: {0}}" TextWrapping="Wrap"/>
+   <Button Content="설정 저장" Command="{Binding SaveCommand}" HorizontalAlignment="Right" MinWidth="100" Margin="0,6,0,0"/>
+  </StackPanel>
+  <TabControl>
+   <TabItem Header="서버 설정">
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+     <StackPanel Margin="10">
+      <GroupBox Header="HTTP 서버 상태" Margin="0,0,0,10">
+       <Grid Margin="8">
+        <Grid.ColumnDefinitions><ColumnDefinition Width="130"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+        <Grid.RowDefinitions><RowDefinition/><RowDefinition/><RowDefinition/></Grid.RowDefinitions>
+        <Label Content="상태"/><TextBlock Grid.Column="1" Text="{Binding ServerStatus}" FontWeight="Bold" VerticalAlignment="Center"/>
+        <Label Grid.Row="1" Content="수신 주소"/><TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding Listening}" VerticalAlignment="Center"/>
+        <Label Grid.Row="2" Content="마지막 요청"/><TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding LastRequest}" TextWrapping="Wrap" VerticalAlignment="Center"/>
+       </Grid>
+      </GroupBox>
+      <GroupBox Header="수신 설정">
+       <Grid Margin="8">
+        <Grid.ColumnDefinitions><ColumnDefinition Width="130"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+        <Grid.RowDefinitions><RowDefinition/><RowDefinition/><RowDefinition/></Grid.RowDefinitions>
+        <Label Content="PC IPv4"/><TextBox Grid.Column="1" Text="{Binding ListenAddress, UpdateSourceTrigger=PropertyChanged}" Margin="4"/>
+        <Label Grid.Row="1" Content="Port"/><TextBox Grid.Row="1" Grid.Column="1" Text="{Binding ListenPort, UpdateSourceTrigger=PropertyChanged}" Margin="4"/>
+        <Label Grid.Row="2" Content="API Path"/><TextBox Grid.Row="2" Grid.Column="1" Text="{Binding ApiPath, UpdateSourceTrigger=PropertyChanged}" Margin="4"/>
+       </Grid>
+      </GroupBox>
+      <WrapPanel Margin="0,8,0,0">
+       <Button Content="모니터 새로고침" Command="{Binding RefreshCommand}" Margin="0,0,6,0"/>
+       <Button Content="서버 시작" Command="{Binding StartCommand}" IsEnabled="{Binding CanStartServer}" Margin="0,0,6,0"/>
+       <Button Content="서버 중지" Command="{Binding StopCommand}" IsEnabled="{Binding CanStopServer}" Margin="0,0,6,0"/>
+       <Button Content="HTTP 서버 테스트" Command="{Binding HealthCommand}"/>
+      </WrapPanel>
+      <TextBlock Margin="0,8,0,0" Text="기본 주소 127.0.0.1은 PC 자체 테스트용입니다. 실제 스마트폰에는 PC의 LAN IPv4를 입력하세요." TextWrapping="Wrap"/>
+     </StackPanel>
+    </ScrollViewer>
+   </TabItem>
+   <TabItem Header="알림 설정">
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+     <StackPanel Margin="10">
+      <GroupBox Header="위치와 크기">
+       <Grid Margin="8">
+        <Grid.ColumnDefinitions><ColumnDefinition Width="130"/><ColumnDefinition Width="*"/><ColumnDefinition Width="130"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+        <Grid.RowDefinitions><RowDefinition/><RowDefinition/><RowDefinition/></Grid.RowDefinitions>
+        <Label Content="모니터"/><ComboBox Grid.Column="1" Grid.ColumnSpan="3" ItemsSource="{Binding Monitors}" DisplayMemberPath="Label" SelectedValuePath="Id" SelectedValue="{Binding Monitor}" Margin="4"/>
+        <Label Grid.Row="1" Content="X"/><TextBox Grid.Row="1" Grid.Column="1" Text="{Binding PopupX, UpdateSourceTrigger=PropertyChanged}" Margin="4"/>
+        <Label Grid.Row="1" Grid.Column="2" Content="Y"/><TextBox Grid.Row="1" Grid.Column="3" Text="{Binding PopupY, UpdateSourceTrigger=PropertyChanged}" Margin="4"/>
+        <Label Grid.Row="2" Content="Width"/><TextBox Grid.Row="2" Grid.Column="1" Text="{Binding PopupWidth, UpdateSourceTrigger=PropertyChanged}" Margin="4"/>
+        <Label Grid.Row="2" Grid.Column="2" Content="Height"/><TextBox Grid.Row="2" Grid.Column="3" Text="{Binding PopupHeight, UpdateSourceTrigger=PropertyChanged}" Margin="4"/>
+       </Grid>
+      </GroupBox>
+      <GroupBox Header="표시" Margin="0,10,0,0">
+       <Grid Margin="8">
+        <Grid.ColumnDefinitions><ColumnDefinition Width="130"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+        <Grid.RowDefinitions><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/></Grid.RowDefinitions>
+        <Label Content="표시 시간(초)"/><TextBox Grid.Column="1" Text="{Binding DisplayDurationSeconds, UpdateSourceTrigger=PropertyChanged}" Margin="4"/>
+        <Label Grid.Row="1" Content="시간 형식"/><ComboBox Grid.Row="1" Grid.Column="1" ItemsSource="{Binding TimeFormats}" Text="{Binding TimeFormat, UpdateSourceTrigger=PropertyChanged}" IsEditable="True" Margin="4"/>
+        <Label Grid.Row="2" Content="미리보기"/><TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding TimePreview}" VerticalAlignment="Center"/>
+        <StackPanel Grid.Row="3" Grid.Column="1" Orientation="Horizontal"><CheckBox Content="항상 위" IsChecked="{Binding TopMost}" Margin="4"/><CheckBox Content="알림음" IsChecked="{Binding PlaySound}" Margin="12,4,4,4"/></StackPanel>
+       </Grid>
+      </GroupBox>
+      <Button Content="알림 위치 테스트" Command="{Binding PreviewCommand}" HorizontalAlignment="Left" Margin="0,8,0,0"/>
+     </StackPanel>
+    </ScrollViewer>
+   </TabItem>
+   <TabItem Header="프로그램 설정">
+    <StackPanel Margin="10">
+     <GroupBox Header="설정 파일 위치">
+      <StackPanel Margin="8">
+       <TextBox Text="{Binding SettingsDirectory, Mode=OneWay}" IsReadOnly="True"/>
+       <WrapPanel Margin="0,6,0,0"><Button Content="설정 폴더 선택" Command="{Binding ChooseSettingsDirectoryCommand}" Margin="0,0,6,0"/><Button Content="실행 파일 위치로 되돌리기" Command="{Binding ResetSettingsDirectoryCommand}"/></WrapPanel>
+       <TextBlock Margin="0,6,0,0" Text="위치 변경은 프로그램을 다시 시작한 뒤 적용됩니다."/>
+      </StackPanel>
+     </GroupBox>
+     <CheckBox Content="Windows 로그인 시 자동 실행" IsChecked="{Binding StartWithWindows}" Margin="4,10,4,4"/>
+     <CheckBox Content="설정 창을 닫으면 트레이로 이동" IsChecked="{Binding MinimizeToTray}" Margin="4"/>
+    </StackPanel>
+   </TabItem>
+   <TabItem Header="최근 요청"><ListBox Margin="10" ItemsSource="{Binding Log.Entries}" DisplayMemberPath="Display"/></TabItem>
+  </TabControl>
+ </DockPanel>
+</Window>
