@@ -71,3 +71,4 @@ events.sqlite3-*
 *.bak
 
 # Keep Gradle Wrapper, source, project files and CI workflows tracked.
+result/
