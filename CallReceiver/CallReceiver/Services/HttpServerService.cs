@@ -36,8 +36,7 @@ public sealed class HttpServerService(EventStore store, RequestLog log)
             var app = builder.Build();
             app.Use(async (context, next) =>
             {
-                var path = context.Request.Path.Value;
-                var route = path == "/api/health" || path == settings.ApiPath ? path : "(unknown path)";
+                var route = context.Request.Path.Value ?? "/";
                 try
                 {
                     await next(context);
@@ -76,8 +75,8 @@ public sealed class HttpServerService(EventStore store, RequestLog log)
                     // Deliberately finish the durable write even if the client disconnects.
                     var created = await store.AcceptAsync(value);
                     context.Items["detail"] = created
-                        ? PhoneText.Mask(value.PhoneNumber)
-                        : $"DUPLICATE eventId={value.EventId}";
+                        ? value.PhoneNumber
+                        : "DUPLICATE";
                     if (created) EventAccepted?.Invoke();
                     return Results.Json(new { success = true, eventId = value.EventId });
                 }

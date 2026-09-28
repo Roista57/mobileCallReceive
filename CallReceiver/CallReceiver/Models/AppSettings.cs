@@ -14,7 +14,11 @@ public sealed record AppSettings
     public double PopupWidth { get; init; } = 350;
     public double PopupHeight { get; init; } = 140;
     public double DisplayDurationSeconds { get; init; } = 5;
-    public string TimeFormat { get; init; } = "yyyy-MM-dd HH:mm:ss";
+    public string NotificationText { get; init; } = "전화수신알림";
+    public double PhoneFontSize { get; init; } = 22;
+    public bool PhoneFontBold { get; init; } = true;
+    public double TimeFontSize { get; init; } = 22;
+    public bool TimeFontBold { get; init; } = true;
     public bool TopMost { get; init; } = true;
     public bool PlaySound { get; init; } = true;
     public bool StartWithWindows { get; init; }
@@ -34,12 +38,14 @@ public sealed record AppSettings
         if (!double.IsFinite(PopupWidth) || PopupWidth is < 240 or > 2000 ||
             !double.IsFinite(PopupHeight) || PopupHeight is < 120 or > 1200)
             return "팝업 크기는 Width 240~2000, Height 120~1200 DIP 범위입니다.";
-        if (!double.IsFinite(DisplayDurationSeconds) || DisplayDurationSeconds is < 1 or > 60)
-            return "표시 시간은 1~60초입니다.";
-        if (string.IsNullOrWhiteSpace(TimeFormat) || TimeFormat.Length > 100)
-            return "시간 형식은 1~100자로 입력하세요.";
-        try { _ = DateTimeOffset.Now.ToString(TimeFormat); }
-        catch (FormatException) { return "올바른 .NET 날짜/시간 형식을 입력하세요."; }
+        if (!double.IsFinite(DisplayDurationSeconds) || DisplayDurationSeconds is < 1 or > 9999)
+            return "표시 시간은 1~9999초입니다.";
+        if (string.IsNullOrWhiteSpace(NotificationText) || NotificationText.Length > 100)
+            return "안내 문구는 1~100자로 입력하세요.";
+        if (!double.IsFinite(PhoneFontSize) || PhoneFontSize is < 8 or > 100)
+            return "전화번호 글꼴 크기는 8~100이어야 합니다.";
+        if (!double.IsFinite(TimeFontSize) || TimeFontSize is < 8 or > 100)
+            return "수신시간 글꼴 크기는 8~100이어야 합니다.";
         return null;
     }
 }

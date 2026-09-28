@@ -56,7 +56,16 @@ public class HttpTests
         Assert.Equal(1, await f.Store.PendingCountAsync());
         Assert.Equal(value, await f.Store.NextAsync());
         Assert.Contains(f.Log.Entries, l => l.Message.Contains("DUPLICATE"));
-        Assert.DoesNotContain(f.Log.Entries, l => l.Message.Contains("01012345678"));
+        Assert.Contains(f.Log.Entries, l => l.Message == "POST /api/call 200 01012345678");
+        Assert.DoesNotContain(f.Log.Entries, l => l.Message.Contains("eventId", StringComparison.OrdinalIgnoreCase));
+    }
+    [Fact] public async Task UnknownRouteLogContainsTheActualPathWithoutQuery()
+    {
+        await using var f = new HttpFixture(); await f.StartAsync();
+        using var response = await f.Client.PostAsync("/wrong/path?secret=value", new StringContent(""));
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Contains(f.Log.Entries, entry => entry.Message == "POST /wrong/path 404");
+        Assert.DoesNotContain(f.Log.Entries, entry => entry.Message.Contains("secret=value"));
     }
     [Fact] public async Task AcceptsWithoutAuthenticationAndRejectsMalformedRequests()
     {

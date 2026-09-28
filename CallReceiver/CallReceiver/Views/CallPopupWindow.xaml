@@ -8,8 +8,8 @@
    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
    <TextBlock x:Name="TitleText"/>
    <Button Content="X" HorizontalAlignment="Right" Focusable="False" Click="CloseClick" MinWidth="28"/>
-   <TextBlock x:Name="NumberText" Grid.Row="1" FontSize="22" FontWeight="Bold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
-   <TextBlock x:Name="TimeText" Grid.Row="2"/>
+   <TextBlock x:Name="NumberText" Grid.Row="1" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+   <TextBlock x:Name="TimeText" Grid.Row="2" TextTrimming="CharacterEllipsis"/>
   </Grid>
  </Border>
 </Window>

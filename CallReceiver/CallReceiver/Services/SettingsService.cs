@@ -37,18 +37,7 @@ public sealed class SettingsService(string directory)
             await stream.FlushAsync();
             stream.Flush(true);
         }
-        if (File.Exists(SettingsPath))
-        {
-            // Do not replace the last valid backup with a corrupt primary file.
-            bool valid;
-            try
-            {
-                var old = JsonSerializer.Deserialize<AppSettings>(await File.ReadAllTextAsync(SettingsPath), JsonDefaults.Options);
-                valid = old?.Validate() is null && old is not null;
-            }
-            catch (JsonException) { valid = false; }
-            File.Replace(temp, SettingsPath, valid ? SettingsPath + ".bak" : null);
-        }
+        if (File.Exists(SettingsPath)) File.Replace(temp, SettingsPath, null);
         else File.Move(temp, SettingsPath);
     }
 }

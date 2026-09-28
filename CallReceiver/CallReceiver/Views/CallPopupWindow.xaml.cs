@@ -20,11 +20,15 @@ public partial class CallPopupWindow : Window
         Width = settings.PopupWidth; Height = settings.PopupHeight; Topmost = settings.TopMost;
         bounds = MonitorService.Clamp(monitor, settings.PopupX, settings.PopupY, settings.PopupWidth, settings.PopupHeight);
         var number = PhoneText.Format(value.PhoneNumber);
-        var time = value.ReceivedAt.ToLocalTime().ToString(settings.TimeFormat);
-        TitleText.Text = $"{time} {number}";
+        var time = value.ReceivedAt.ToLocalTime().ToString("yyyy.MM.dd HH:mm:ss");
+        TitleText.Text = $"{settings.NotificationText} {number}";
         Title = TitleText.Text;
-        NumberText.Text = number;
-        TimeText.Text = time;
+        NumberText.Text = $"전화번호: {number}";
+        TimeText.Text = $"수신시간: {time}";
+        NumberText.FontSize = settings.PhoneFontSize;
+        NumberText.FontWeight = settings.PhoneFontBold ? FontWeights.Bold : FontWeights.Normal;
+        TimeText.FontSize = settings.TimeFontSize;
+        TimeText.FontWeight = settings.TimeFontBold ? FontWeights.Bold : FontWeights.Normal;
         SourceInitialized += (_, _) =>
         {
             var handle = new WindowInteropHelper(this).Handle;

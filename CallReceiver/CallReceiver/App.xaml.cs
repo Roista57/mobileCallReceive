@@ -44,7 +44,7 @@ public partial class App : Application
             }
             var settings = new SettingsService(directory);
             var primary = MonitorService.Primary();
-            var defaults = new AppSettings { Monitor = primary.Id,
+            var defaults = new AppSettings { ListenAddress = NetworkAddresses.DefaultAddress(), Monitor = primary.Id,
                 PopupX = Math.Max(0, primary.Width / primary.ScaleX - 370),
                 PopupY = Math.Max(0, primary.Height / primary.ScaleY - 160) };
             var loaded = await settings.LoadAsync(defaults);
@@ -68,7 +68,7 @@ public partial class App : Application
             await model.StartInitialAsync();
             if (loaded.Warning is { } warning) model.SetMessage(warning);
             if (resolved.Warning is { } locationWarning) model.SetMessage(locationWarning);
-            if (loaded.FirstRun || loaded.Warning is not null || !server.IsRunning || e.Args.Contains("--settings")) ShowSettings();
+            if (e.Args.Contains("--settings")) ShowSettings();
             timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
             timer.Tick += async (_, _) => await model.RefreshStatusAsync();
             timer.Start();

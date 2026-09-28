@@ -3,6 +3,7 @@ using System.Runtime.CompilerServices;
 using System.Windows.Input;
 using System.Windows.Threading;
 using System.Net.Http;
+using System.Text;
 using CallReceiver.Models;
 using CallReceiver.Services;
 
@@ -26,10 +27,13 @@ public sealed class MainViewModel : INotifyPropertyChanged
     private readonly StartupService startup;
     private readonly HttpSelfTest selfTest = new();
     private readonly Dispatcher dispatcher;
+    private readonly Func<string> currentAddress;
+    private readonly Func<string, string, bool> confirm;
+    private readonly Func<string?> chooseLogFile;
     private readonly List<AsyncCommand> commands = [];
     private AppSettings saved;
     private bool busy;
-    private string message = "", lastError = "", lastRequest = "없음", popupStatus = "없음";
+    private string message = "", popupStatus = "없음";
     public AppSettings Saved => Volatile.Read(ref saved);
     public RequestLog Log { get; }
     public IReadOnlyList<MonitorInfo> Monitors { get; private set; } = [];
@@ -38,14 +42,9 @@ public sealed class MainViewModel : INotifyPropertyChanged
     public bool CanStartServer => !IsBusy && !server.IsRunning;
     public bool CanStopServer => !IsBusy && server.IsRunning;
     public string Message { get => message; private set { message = value; Raise(); } }
-    public string LastError { get => lastError; private set { lastError = value; Raise(); } }
-    public string LastRequest { get => lastRequest; private set { lastRequest = value; Raise(); } }
     public string PopupStatus { get => popupStatus; private set { popupStatus = value; Raise(); } }
     public string ServerStatus => server.IsRunning ? "실행 중" : "중지됨";
     public string SettingsDirectory => settingsService.DirectoryPath;
-    public IReadOnlyList<string> TimeFormats { get; } =
-        ["yyyy-MM-dd HH:mm:ss", "yyyy-MM-dd tt h:mm:ss", "HH:mm:ss", "tt h:mm"];
-    public string TimePreview { get { try { return DateTimeOffset.Now.ToString(TimeFormat); } catch { return "잘못된 시간 형식"; } } }
     public string Listening => server.RunningSettings is { } s
         ? $"{s.ListenAddress}:{s.ListenPort}"
         : "수신 중인 주소 없음";
@@ -58,13 +57,22 @@ public sealed class MainViewModel : INotifyPropertyChanged
     public AsyncCommand RefreshCommand { get; }
     public AsyncCommand ChooseSettingsDirectoryCommand { get; }
     public AsyncCommand ResetSettingsDirectoryCommand { get; }
+    public AsyncCommand ResetSettingsCommand { get; }
+    public AsyncCommand ClearLogCommand { get; }
+    public AsyncCommand ExportLogCommand { get; }
     public event Action? ServerChanged;
 
     public MainViewModel(AppSettings initial, SettingsService settingsService, SettingsLocationService locationService, HttpServerService server,
-        EventStore store, NotificationManager notifications, StartupService startup, RequestLog log, Dispatcher dispatcher)
+        EventStore store, NotificationManager notifications, StartupService startup, RequestLog log, Dispatcher dispatcher,
+        Func<string>? currentAddress = null, Func<string, string, bool>? confirm = null,
+        Func<string?>? chooseLogFile = null)
     {
         saved = initial; this.settingsService = settingsService; this.locationService = locationService; this.server = server; this.store = store;
         this.notifications = notifications; this.startup = startup; Log = log; this.dispatcher = dispatcher;
+        this.currentAddress = currentAddress ?? NetworkAddresses.DefaultAddress;
+        this.confirm = confirm ?? ((text, title) => System.Windows.MessageBox.Show(text, title,
+            System.Windows.MessageBoxButton.YesNo, System.Windows.MessageBoxImage.Question) == System.Windows.MessageBoxResult.Yes);
+        this.chooseLogFile = chooseLogFile ?? ChooseLogFile;
         LoadDraft(initial);
         RefreshEnvironment();
         AsyncCommand Command(Func<Task> action)
@@ -73,7 +81,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
             commands.Add(command); return command;
         }
         SaveCommand = Command(SaveAsync);
-        StartCommand = Command(async () => { EnsureSaved(); await server.StartAsync(Saved); Message = "HTTP 서버를 시작했습니다."; });
+        StartCommand = Command(async () => { EnsureSaved(); await StartServerWithCurrentAddressAsync(); Message = "HTTP 서버를 시작했습니다."; });
         StopCommand = Command(async () => { await server.StopAsync(); Message = "HTTP 수신을 중지했습니다. 접수된 알림은 계속 표시됩니다."; });
         HealthCommand = Command(async () => { EnsureServer(); Message = await selfTest.HealthAsync(Saved); });
         PreviewCommand = Command(() =>
@@ -98,7 +106,15 @@ public sealed class MainViewModel : INotifyPropertyChanged
             await locationService.ChangeAsync(SettingsDirectory, locationService.ExecutableDirectory);
             Message = "기본 설정 위치를 저장했습니다. 프로그램을 다시 시작하면 적용됩니다.";
         });
-        log.Added += entry => { LastRequest = entry.Display; };
+        ResetSettingsCommand = Command(ResetSettingsAsync);
+        ClearLogCommand = Command(() =>
+        {
+            if (!this.confirm("최근 요청 로그를 모두 지우시겠습니까?", "로그 초기화")) return Task.CompletedTask;
+            Log.Clear();
+            Message = "최근 요청 로그를 초기화했습니다.";
+            return Task.CompletedTask;
+        });
+        ExportLogCommand = Command(ExportLogAsync);
         notifications.Shown += id => dispatcher.BeginInvoke(() => PopupStatus = $"표시 성공 · {id}");
     }
 
@@ -115,7 +131,15 @@ public sealed class MainViewModel : INotifyPropertyChanged
     }
     public async Task StartInitialAsync()
     {
-        await ExecuteAsync(() => server.StartAsync(Saved));
+        await ExecuteAsync(StartServerWithCurrentAddressAsync);
+    }
+    private async Task StartServerWithCurrentAddressAsync()
+    {
+        var next = Saved with { ListenAddress = currentAddress() };
+        ListenAddress = next.ListenAddress;
+        await settingsService.SaveAsync(next);
+        Volatile.Write(ref saved, next);
+        await server.StartAsync(next);
     }
     private void EnsureSaved()
     {
@@ -130,20 +154,63 @@ public sealed class MainViewModel : INotifyPropertyChanged
     {
         if (IsBusy) return;
         IsBusy = true;
-        try { await action(); LastError = ""; }
-        catch (HttpRequestException e) { LastError = Message = e.StatusCode is System.Net.HttpStatusCode.Unauthorized or System.Net.HttpStatusCode.Forbidden
+        try { await action(); }
+        catch (HttpRequestException e) { Message = e.StatusCode is System.Net.HttpStatusCode.Unauthorized or System.Net.HttpStatusCode.Forbidden
             ? "인증 오류: API Key를 확인하세요." : $"HTTP 오류/연결 실패 ({e.StatusCode?.ToString() ?? "서버·포트 확인"})"; }
-        catch (OperationCanceledException) { LastError = Message = "Timeout: 요청 시간이 초과되었습니다."; }
+        catch (OperationCanceledException) { Message = "Timeout: 요청 시간이 초과되었습니다."; }
         catch (Exception e)
         {
-            LastError = Message = e is ArgumentException or InvalidOperationException or FormatException
+            Message = e is ArgumentException or InvalidOperationException or FormatException
                 ? e.Message : "작업 실패: 포트 충돌, 파일 접근 권한 또는 서버 상태를 확인하세요.";
         }
         finally { IsBusy = false; Raise(nameof(ServerStatus)); Raise(nameof(Listening)); Raise(nameof(DirtyText)); Raise(nameof(CanStartServer)); Raise(nameof(CanStopServer)); ServerChanged?.Invoke(); }
     }
+    private async Task ResetSettingsAsync()
+    {
+        if (!confirm("서버와 알림 설정을 기본값으로 되돌리시겠습니까?", "설정 초기화")) return;
+        var wasRunning = server.IsRunning;
+        var primary = MonitorService.Primary();
+        var defaults = new AppSettings
+        {
+            ListenAddress = currentAddress(),
+            Monitor = primary.Id,
+            PopupX = Math.Max(0, primary.Width / primary.ScaleX - 370),
+            PopupY = Math.Max(0, primary.Height / primary.ScaleY - 160)
+        };
+        if (wasRunning) await server.StopAsync();
+        startup.Apply(false);
+        await settingsService.SaveAsync(defaults);
+        Volatile.Write(ref saved, defaults);
+        LoadDraft(defaults);
+        if (wasRunning) await server.StartAsync(defaults);
+        Message = "설정을 기본값으로 초기화했습니다.";
+        Raise(nameof(DirtyText));
+    }
+    private async Task ExportLogAsync()
+    {
+        var entries = Log.Snapshot();
+        if (entries.Count == 0) throw new InvalidOperationException("저장할 최근 요청 로그가 없습니다.");
+        var path = chooseLogFile();
+        if (string.IsNullOrWhiteSpace(path)) return;
+        await File.WriteAllLinesAsync(path, entries.Select(entry => entry.ExportDisplay), new UTF8Encoding(false));
+        Message = "최근 요청 로그를 TXT 파일로 저장했습니다.";
+    }
+    private static string? ChooseLogFile()
+    {
+        var dialog = new Microsoft.Win32.SaveFileDialog
+        {
+            Title = "최근 요청 로그 저장",
+            Filter = "텍스트 파일 (*.txt)|*.txt",
+            DefaultExt = ".txt",
+            AddExtension = true,
+            FileName = $"CallReceiver-log-{DateTime.Now:yyyyMMdd-HHmmss}.txt"
+        };
+        return dialog.ShowDialog() == true ? dialog.FileName : null;
+    }
     private async Task SaveAsync()
     {
-        var next = ReadDraft();
+        var next = ReadDraft() with { ListenAddress = currentAddress() };
+        ListenAddress = next.ListenAddress;
         if (next.Validate() is { } error) throw new ArgumentException(error);
         var old = Saved;
         var oldStartup = startup.Read();
@@ -187,8 +254,16 @@ public sealed class MainViewModel : INotifyPropertyChanged
     public string PopupHeight { get => _PopupHeight; set { _PopupHeight = value; Raise(); Raise(nameof(DirtyText)); } }
     private string _DisplayDurationSeconds = "5";
     public string DisplayDurationSeconds { get => _DisplayDurationSeconds; set { _DisplayDurationSeconds = value; Raise(); Raise(nameof(DirtyText)); } }
-    private string _TimeFormat = "yyyy-MM-dd HH:mm:ss";
-    public string TimeFormat { get => _TimeFormat; set { _TimeFormat = value; Raise(); Raise(nameof(TimePreview)); Raise(nameof(DirtyText)); } }
+    private string _NotificationText = "전화수신알림";
+    public string NotificationText { get => _NotificationText; set { _NotificationText = value; Raise(); Raise(nameof(DirtyText)); } }
+    private string _PhoneFontSize = "22";
+    public string PhoneFontSize { get => _PhoneFontSize; set { _PhoneFontSize = value; Raise(); Raise(nameof(DirtyText)); } }
+    private string _PhoneFontWeight = "Bold";
+    public string PhoneFontWeight { get => _PhoneFontWeight; set { _PhoneFontWeight = value; Raise(); Raise(nameof(DirtyText)); } }
+    private string _TimeFontSize = "22";
+    public string TimeFontSize { get => _TimeFontSize; set { _TimeFontSize = value; Raise(); Raise(nameof(DirtyText)); } }
+    private string _TimeFontWeight = "Bold";
+    public string TimeFontWeight { get => _TimeFontWeight; set { _TimeFontWeight = value; Raise(); Raise(nameof(DirtyText)); } }
     private bool _TopMost = true;
     public bool TopMost { get => _TopMost; set { _TopMost = value; Raise(); Raise(nameof(DirtyText)); } }
     private bool _PlaySound = true;
@@ -208,7 +283,11 @@ public sealed class MainViewModel : INotifyPropertyChanged
         PopupWidth = s.PopupWidth.ToString(System.Globalization.CultureInfo.InvariantCulture);
         PopupHeight = s.PopupHeight.ToString(System.Globalization.CultureInfo.InvariantCulture);
         DisplayDurationSeconds = s.DisplayDurationSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture);
-        TimeFormat = s.TimeFormat;
+        NotificationText = s.NotificationText;
+        PhoneFontSize = s.PhoneFontSize.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        PhoneFontWeight = s.PhoneFontBold ? "Bold" : "Normal";
+        TimeFontSize = s.TimeFontSize.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        TimeFontWeight = s.TimeFontBold ? "Bold" : "Normal";
         TopMost = s.TopMost;
         PlaySound = s.PlaySound;
         StartWithWindows = s.StartWithWindows;
@@ -227,7 +306,11 @@ public sealed class MainViewModel : INotifyPropertyChanged
             PopupWidth = Number(PopupWidth),
             PopupHeight = Number(PopupHeight),
             DisplayDurationSeconds = Number(DisplayDurationSeconds),
-            TimeFormat = TimeFormat,
+            NotificationText = NotificationText,
+            PhoneFontSize = Number(PhoneFontSize),
+            PhoneFontBold = PhoneFontWeight == "Bold",
+            TimeFontSize = Number(TimeFontSize),
+            TimeFontBold = TimeFontWeight == "Bold",
             TopMost = TopMost,
             PlaySound = PlaySound,
             StartWithWindows = StartWithWindows,

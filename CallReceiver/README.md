@@ -1,4 +1,4 @@
-﻿# Windows 전화 수신 앱
+# Windows 전화 수신 앱
 
 .NET 10 WPF 앱이 Android의 전화 이벤트를 받아 SQLite에 기록하고 순서대로 팝업을 표시합니다.
 
@@ -17,7 +17,12 @@ dotnet run --project CallReceiver
 
 기본적으로 실행 파일 옆에 `settings.json`과 `events.sqlite3`를 만듭니다. `config-location.json`은 사용자가 고른 설정 디렉터리를 기록합니다. 프로그램 설정 탭에서 빈 폴더를 선택하면 현재 설정과 DB를 복사하며 다음 실행부터 적용합니다. `--data-dir <path>`는 bootstrap보다 우선합니다.
 
-알림 시간 형식은 프리셋을 선택하거나 .NET 형식을 직접 입력할 수 있습니다. 기본값은 `yyyy-MM-dd HH:mm:ss`입니다.
+알림 상단은 `안내 문구 전화번호`, 본문은 `전화번호: 전화번호`와 `수신시간: 시간` 형식으로 표시됩니다. 안내 문구 기본값은 `전화수신알림`이며 수신 시각은 PC 현지 시간의 `yyyy.MM.dd HH:mm:ss` 형식을 사용합니다. 표시 시간은 1~9999초이며, 표시 중 새 알림이 도착하면 기존 팝업을 닫고 새 알림을 표시합니다.
+전화번호와 수신시간의 글꼴 크기와 굵기는 각각 설정할 수 있습니다. 기본값은 모두 22pt 굵게이며 크기는 8~100 범위입니다.
+
+프로그램은 일반 실행과 Windows 로그인 자동 실행 모두 트레이에서 시작합니다. 설정 창은 트레이 메뉴, 두 번째 실행 또는 `--settings` 인자로 열 수 있습니다. 서버를 시작할 때마다 현재 PC의 첫 번째 LAN IPv4를 감지해 설정에 저장하며, 사용할 LAN 주소가 없을 때는 `127.0.0.1`을 사용합니다.
+
+프로그램 설정의 `설정 초기화`는 서버와 알림 설정 및 Windows 자동 실행을 기본값으로 되돌리며 설정 위치와 이벤트 DB는 유지합니다. 최근 요청에는 수신 전화번호 원문이 표시됩니다. 최근 요청 탭에서 메모리 로그를 초기화하거나 최신순 전체 날짜 형식의 UTF-8 TXT 파일로 저장할 수 있습니다.
 
 ## 테스트와 배포
 
@@ -28,7 +33,7 @@ dotnet publish CallReceiver\CallReceiver.csproj -c Release -r win-x64 --self-con
 
 배포 실행 파일은 `artifacts\win-x64\CallReceiver.exe`입니다.
 
-관리 DLL(앱·WPF·HTTP·SQLite 연결 코드)과 한국어·영어 리소스는 .NET SDK 번들 기능으로 `CallReceiver.exe`에 포함합니다. 네이티브 DLL과 PDB는 SDK publish 결과대로 외부에 둡니다. .NET 별도 설치는 필요 없지만 **EXE만 복사하면 안 됩니다. ZIP 전체를 함께 배포해야 합니다.** trimming과 네이티브 라이브러리 자동 추출은 사용하지 않습니다. SDK가 `.deps.json`과 `.runtimeconfig.json`도 처리합니다.
+관리 DLL(앱·WPF·HTTP·SQLite 연결 코드)과 한국어·영어 리소스는 .NET SDK 번들 기능으로 `CallReceiver.exe`에 포함합니다. 앱의 PDB 디버깅 정보는 어셈블리에 내장하여 publish 시 EXE에 포함합니다. 네이티브 DLL은 외부에 둡니다. .NET 별도 설치는 필요 없지만 **EXE만 복사하면 안 됩니다. ZIP 전체를 함께 배포해야 합니다.** trimming과 네이티브 라이브러리 자동 추출은 사용하지 않습니다. SDK가 `.deps.json`과 `.runtimeconfig.json`도 처리합니다.
 
 언어별 리소스는 `SatelliteResourceLanguages=ko;en`으로 제한합니다. 한국어 리소스도 EXE 안에 있으므로 외부 `ko` 폴더가 없는 것이 정상이며 영어는 기본 리소스를 사용할 수 있습니다. 화면 문구와 언어 선택 동작을 변경하는 설정은 아닙니다. 설정 JSON과 이벤트 DB는 기존대로 외부에 저장하며, `AppContext.BaseDirectory`와 `Environment.ProcessPath`로 실행 파일 기준 경로를 유지합니다.
 
@@ -58,3 +63,5 @@ ZIP의 모든 파일을 publish 폴더와 해시로 대조했습니다. 검사 �
 정식 배포본은 버전 태그로 자동 생성합니다. 배포 키와 GitHub Secrets 등록, 버전 변경 및 태그 생성 방법은 [GitHub Release 배포 안내](../docs/RELEASE.md)를 따릅니다.
 
 방화벽은 앱이 변경하지 않습니다. LAN 수신이 필요하면 개인 네트워크의 LocalSubnet만 허용하는 규칙을 직접 추가합니다.
+
+설정 저장은 임시 파일을 기록한 뒤 교체하며 settings.json.bak을 새로 생성하거나 갱신하지 않습니다. 기존 백업은 자동 삭제하지 않으며 구버전 백업 읽기는 호환성을 위해 유지합니다.

@@ -3,16 +3,15 @@ $ErrorActionPreference = 'Stop'
 $repo = Split-Path $PSScriptRoot -Parent
 $exe = Join-Path $repo 'artifacts/win-x64/CallReceiver.exe'
 if (-not (Test-Path -LiteralPath $exe)) { throw 'Publish the win-x64 application first.' }
-$check = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, 18080)
-try { $check.Start() } finally { $check.Stop() }
 $dataDir = Join-Path $repo ('artifacts/smoke/' + [guid]::NewGuid().ToString())
 [System.IO.Directory]::CreateDirectory($dataDir) | Out-Null
 Add-Type -AssemblyName System.Windows.Forms
 $settings = @{
-    listenAddress='127.0.0.1'; listenPort=18080; timeFormat='yyyy-MM-dd HH:mm:ss'
+    listenAddress='127.0.0.1'; listenPort=18080; notificationText='전화수신알림'
     monitor=[System.Windows.Forms.Screen]::PrimaryScreen.DeviceName
     popupX=30; popupY=30; popupWidth=350; popupHeight=140
     displayDurationSeconds=3; topMost=$false; playSound=$false
+    phoneFontSize=22; phoneFontBold=$true; timeFontSize=22; timeFontBold=$true
     startWithWindows=$false; minimizeToTray=$false
 }
 [System.IO.File]::WriteAllText((Join-Path $dataDir 'settings.json'),
@@ -47,7 +46,9 @@ try {
     $deadline = [DateTime]::UtcNow.AddSeconds(30)
     do {
         if ($process.HasExited) { throw 'The published app exited during startup.' }
-        try { $health = Invoke-RestMethod 'http://127.0.0.1:18080/api/health' -TimeoutSec 2 } catch { $health = $null }
+        $runtimeSettings = Get-Content (Join-Path $dataDir 'settings.json') -Raw | ConvertFrom-Json
+        $serverBase = "http://$($runtimeSettings.listenAddress):$($runtimeSettings.listenPort)"
+        try { $health = Invoke-RestMethod "$serverBase/api/health" -TimeoutSec 2 } catch { $health = $null }
         if ($health.success) { break }
         Start-Sleep -Milliseconds 200
     } while ([DateTime]::UtcNow -lt $deadline)
@@ -62,8 +63,9 @@ try {
             phoneNumber='01012345678'; receivedAt=[DateTimeOffset]::Now.ToString('O')
             sentAt=[DateTimeOffset]::Now.ToString('O'); isTest=$true }
         $body = $event | ConvertTo-Json
-        $ack = Invoke-RestMethod 'http://127.0.0.1:18080/api/call' -Method Post -ContentType 'application/json' -Body $body
-        $duplicate = Invoke-RestMethod 'http://127.0.0.1:18080/api/call' -Method Post -ContentType 'application/json' -Body $body
+        $callUrl = $serverBase + $runtimeSettings.apiPath
+        $ack = Invoke-RestMethod $callUrl -Method Post -ContentType 'application/json' -Body $body
+        $duplicate = Invoke-RestMethod $callUrl -Method Post -ContentType 'application/json' -Body $body
         if ($ack.eventId -ne $event.eventId -or $duplicate.eventId -ne $event.eventId) { throw 'Acknowledgement mismatch.' }
     }
     $deadline = [DateTime]::UtcNow.AddSeconds(150)

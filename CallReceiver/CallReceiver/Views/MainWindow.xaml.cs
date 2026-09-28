@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Windows;
+using System.Windows.Input;
 using CallReceiver.ViewModels;
 
 namespace CallReceiver.Views;
@@ -24,5 +25,14 @@ public partial class MainWindow : Window
             else _ = exit();
         }
         base.OnClosing(e);
+    }
+    private void IntegerTextInput(object sender, TextCompositionEventArgs e) =>
+        e.Handled = e.Text.Any(c => !char.IsAsciiDigit(c));
+    private void IntegerPaste(object sender, DataObjectPastingEventArgs e)
+    {
+        if (!e.DataObject.GetDataPresent(DataFormats.UnicodeText) ||
+            e.DataObject.GetData(DataFormats.UnicodeText) is not string value ||
+            value.Length == 0 || value.Any(c => !char.IsAsciiDigit(c)))
+            e.CancelCommand();
     }
 }

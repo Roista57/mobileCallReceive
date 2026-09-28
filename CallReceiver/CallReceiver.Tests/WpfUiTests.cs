@@ -59,16 +59,19 @@ public sealed class WpfUiTests
         await f.StartAsync();
         var monitor = MonitorService.Primary();
         var initial = f.Settings with { Monitor = monitor.Id, PopupX = 20, PopupY = 20,
-            DisplayDurationSeconds = 1, PlaySound = false };
+            DisplayDurationSeconds = 1, PlaySound = false, PhoneFontSize = 18, PhoneFontBold = false,
+            TimeFontSize = 27, TimeFontBold = true };
         var settingsService = new SettingsService(f.Directory.Path);
         var locationService = new SettingsLocationService(f.Directory.Path, f.Directory.Path);
         await settingsService.SaveAsync(initial);
+        var exportedLog = System.IO.Path.Combine(f.Directory.Path, "exported-log.txt");
         var log = new RequestLog(Dispatcher.CurrentDispatcher);
         MainViewModel? model = null;
         await using var manager = new NotificationManager(f.Store,
             new WpfPopupPresenter(Dispatcher.CurrentDispatcher, log), () => model?.Saved ?? initial, log);
         model = new MainViewModel(initial, settingsService, locationService, f.Server, f.Store, manager,
-            new StartupService("MCS_UiTest_" + Guid.NewGuid()), log, Dispatcher.CurrentDispatcher);
+            new StartupService("MCS_UiTest_" + Guid.NewGuid()), log, Dispatcher.CurrentDispatcher,
+            () => initial.ListenAddress, (_, _) => true, () => exportedLog);
         var window = new MainWindow(model, () => Task.CompletedTask);
         using var tray = new TrayService(() => window.Show(), () => window.Show(), () => { });
         f.Server.EventAccepted += manager.Wake;
@@ -79,6 +82,25 @@ public sealed class WpfUiTests
             await Task.Delay(150);
             Assert.True(window.IsVisible);
             Assert.Equal(model, window.DataContext);
+            Assert.Equal("전화 수신 설정", window.Title);
+            Assert.Equal(620, window.Height);
+            Assert.Equal(500, window.MinHeight);
+            Assert.Equal("현재 주소", ((System.Windows.Controls.Label)window.FindName("CurrentAddressLabel")).Content);
+            Assert.NotNull(window.FindName("ResetSettingsButton"));
+            Assert.NotNull(window.FindName("ClearLogButton"));
+            Assert.NotNull(window.FindName("ExportLogButton"));
+            var phoneWeightBox = (System.Windows.Controls.ComboBox)window.FindName("PhoneFontWeightBox");
+            var timeWeightBox = (System.Windows.Controls.ComboBox)window.FindName("TimeFontWeightBox");
+            Assert.Equal("Normal", phoneWeightBox.SelectedValue);
+            Assert.Equal("Bold", timeWeightBox.SelectedValue);
+            Assert.Equal(System.Windows.HorizontalAlignment.Left, phoneWeightBox.HorizontalAlignment);
+            Assert.Equal(System.Windows.HorizontalAlignment.Left, timeWeightBox.HorizontalAlignment);
+            var phoneSizeBox = (System.Windows.Controls.TextBox)window.FindName("PhoneFontSizeBox");
+            var timeSizeBox = (System.Windows.Controls.TextBox)window.FindName("TimeFontSizeBox");
+            Assert.Equal(3, phoneSizeBox.MaxLength);
+            Assert.Equal(3, timeSizeBox.MaxLength);
+            Assert.Equal(56, phoneSizeBox.Width);
+            Assert.Equal(56, timeSizeBox.Width);
             manager.Start();
             var foreground = GetForegroundWindow();
             model.HealthCommand.Execute(null);
@@ -89,9 +111,17 @@ public sealed class WpfUiTests
             Assert.Equal(received.EventId, await new HttpSelfTest().SendAsync(initial, received));
             await WaitUntil(() => OpenWindows<CallPopupWindow>().Length == 1);
             var popup = Assert.Single(OpenWindows<CallPopupWindow>());
-            var expectedTitle = $"{received.ReceivedAt.ToLocalTime().ToString(initial.TimeFormat)} {received.PhoneNumber}";
+            var expectedTitle = $"{initial.NotificationText} {received.PhoneNumber}";
             Assert.Equal(expectedTitle, popup.Title);
             Assert.Equal(expectedTitle, ((System.Windows.Controls.TextBlock)popup.FindName("TitleText")).Text);
+            var numberText = (System.Windows.Controls.TextBlock)popup.FindName("NumberText");
+            var timeText = (System.Windows.Controls.TextBlock)popup.FindName("TimeText");
+            Assert.Equal($"전화번호: {received.PhoneNumber}", numberText.Text);
+            Assert.Equal($"수신시간: {received.ReceivedAt.ToLocalTime():yyyy.MM.dd HH:mm:ss}", timeText.Text);
+            Assert.Equal(18, numberText.FontSize);
+            Assert.Equal(System.Windows.FontWeights.Normal, numberText.FontWeight);
+            Assert.Equal(27, timeText.FontSize);
+            Assert.Equal(System.Windows.FontWeights.Bold, timeText.FontWeight);
             Assert.False(popup.ShowInTaskbar);
             Assert.False(popup.ShowActivated);
             Assert.True(popup.Topmost);
@@ -132,13 +162,33 @@ public sealed class WpfUiTests
                 model.ListenPort = occupied.Settings.ListenPort.ToString();
                 model.SaveCommand.Execute(null);
                 await WaitUntil(() => !model.IsBusy);
-                Assert.NotEmpty(model.LastError);
+                Assert.NotEmpty(model.Message);
                 Assert.Equal(initial.ListenPort, model.Saved.ListenPort);
                 Assert.Contains("HTTP 서버 정상", await new HttpSelfTest().HealthAsync(initial));
                 Assert.Equal(initial.ListenPort, (await settingsService.LoadAsync(initial)).Settings.ListenPort);
             }
             window.Show();
             window.UpdateLayout();
+            model.StopCommand.Execute(null);
+            await WaitUntil(() => !model.IsBusy);
+            var logCountBeforeReset = log.Entries.Count;
+            model.ResetSettingsCommand.Execute(null);
+            await WaitUntil(() => !model.IsBusy);
+            Assert.False(f.Server.IsRunning);
+            Assert.Equal(18080, model.Saved.ListenPort);
+            Assert.Equal("/api/call", model.Saved.ApiPath);
+            Assert.Equal(logCountBeforeReset, log.Entries.Count);
+            Assert.True(File.Exists(System.IO.Path.Combine(f.Directory.Path, "events.db")));
+
+            model.ExportLogCommand.Execute(null);
+            await WaitUntil(() => !model.IsBusy);
+            Assert.True(File.Exists(exportedLog));
+            var exportedText = await File.ReadAllTextAsync(exportedLog, System.Text.Encoding.UTF8);
+            Assert.Matches(@"\d{4}\.\d{2}\.\d{2} \d{2}:\d{2}:\d{2}  ", exportedText);
+            model.ClearLogCommand.Execute(null);
+            await WaitUntil(() => !model.IsBusy);
+            Assert.Empty(log.Entries);
+
             var image = new RenderTargetBitmap((int)window.ActualWidth, (int)window.ActualHeight, 96, 96, PixelFormats.Pbgra32);
             image.Render(window);
             var encoder = new PngBitmapEncoder();

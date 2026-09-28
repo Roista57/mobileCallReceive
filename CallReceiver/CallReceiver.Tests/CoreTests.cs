@@ -13,8 +13,52 @@ public sealed class TestDirectory : IDisposable
     public void Dispose() => Directory.Delete(Path, true);
 }
 
+public sealed class InterruptiblePopupPresenter : IPopupPresenter
+{
+    public System.Collections.Concurrent.ConcurrentQueue<string> ShownIds { get; } = new();
+    public SemaphoreSlim ShownSignal { get; } = new(0);
+    public TaskCompletionSource FirstInterrupted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    public async Task ShowAsync(CallEvent value, AppSettings settings, Func<Task> onShown, CancellationToken token)
+    {
+        await onShown();
+        ShownIds.Enqueue(value.EventId);
+        ShownSignal.Release();
+        try { await Task.Delay(Timeout.InfiniteTimeSpan, token); }
+        catch (OperationCanceledException)
+        {
+            if (ShownIds.Count == 1) FirstInterrupted.TrySetResult();
+            throw;
+        }
+    }
+}
+
 public class CoreTests
 {
+    [Fact] public void DefaultNetworkAddressPrefersFirstLanIpv4AndFallsBackToLoopback()
+    {
+        Assert.Equal("192.168.0.50", NetworkAddresses.DefaultAddress(
+            () => ["127.0.0.1", "192.168.0.50", "10.0.0.7"]));
+        Assert.Equal("10.0.0.7", NetworkAddresses.DefaultAddress(
+            () => ["invalid", "127.0.0.1", "10.0.0.7"]));
+        Assert.Equal("127.0.0.1", NetworkAddresses.DefaultAddress(
+            () => ["127.0.0.1"]));
+        Assert.Equal("127.0.0.1", NetworkAddresses.DefaultAddress(
+            () => throw new System.Net.NetworkInformation.NetworkInformationException()));
+    }
+
+    [Fact] public async Task ExistingSavedListenAddressIsNotReplacedByDetectedDefault()
+    {
+        using var dir = new TestDirectory();
+        var service = new SettingsService(dir.Path);
+        var saved = new AppSettings { ListenAddress = "192.168.0.25" };
+        await service.SaveAsync(saved);
+
+        var loaded = await service.LoadAsync(new AppSettings { ListenAddress = "192.168.0.50" });
+
+        Assert.False(loaded.FirstRun);
+        Assert.Equal("192.168.0.25", loaded.Settings.ListenAddress);
+    }
+
     [Fact] public void SettingsRejectUnsafeAddressesAndInvalidDimensions()
     {
         var s = new AppSettings();
@@ -23,26 +67,49 @@ public class CoreTests
         Assert.NotNull((s with { ListenPort = 0 }).Validate());
         Assert.NotNull((s with { ApiPath = "api/call" }).Validate());
         Assert.NotNull((s with { ApiPath = "//api/call" }).Validate());
-        Assert.NotNull((s with { TimeFormat = "" }).Validate());
-        Assert.NotNull((s with { TimeFormat = new string('y', 101) }).Validate());
+        Assert.NotNull((s with { NotificationText = "" }).Validate());
+        Assert.NotNull((s with { NotificationText = new string('가', 101) }).Validate());
+        Assert.Null((s with { PhoneFontSize = 8, TimeFontSize = 100 }).Validate());
+        Assert.NotNull((s with { PhoneFontSize = 7 }).Validate());
+        Assert.NotNull((s with { PhoneFontSize = 101 }).Validate());
+        Assert.NotNull((s with { TimeFontSize = 7 }).Validate());
+        Assert.NotNull((s with { TimeFontSize = 101 }).Validate());
         Assert.NotNull((s with { PopupWidth = double.NaN }).Validate());
         Assert.NotNull((s with { DisplayDurationSeconds = 0 }).Validate());
+        Assert.Null((s with { DisplayDurationSeconds = 9999 }).Validate());
+        Assert.NotNull((s with { DisplayDurationSeconds = 10000 }).Validate());
     }
     [Fact] public async Task SettingsRoundtripAndCorruptPrimaryRecovery()
     {
         using var dir = new TestDirectory();
         var service = new SettingsService(dir.Path);
-        var first = new AppSettings { TimeFormat = "HH:mm:ss" };
+        var first = new AppSettings { NotificationText = "테스트 알림", PhoneFontSize = 18,
+            PhoneFontBold = false, TimeFontSize = 27, TimeFontBold = true };
         Assert.True((await service.LoadAsync(first)).FirstRun);
         await service.SaveAsync(first);
         await service.SaveAsync(first with { ListenPort = 19000 });
         Assert.Equal(19000, (await service.LoadAsync(first)).Settings.ListenPort);
+        Assert.False(File.Exists(service.SettingsPath + ".bak"));
         await File.WriteAllTextAsync(service.SettingsPath, "{broken");
         var recovered = await service.LoadAsync(first);
         Assert.Equal(first, recovered.Settings);
         Assert.NotNull(recovered.Warning);
         await service.SaveAsync(first with { ListenPort = 19001 });
         Assert.Equal(19001, (await service.LoadAsync(first)).Settings.ListenPort);
+        Assert.False(File.Exists(service.SettingsPath + ".bak"));
+    }
+    [Fact] public void LegacyTimeFormatIsIgnoredAndNotificationTextGetsItsDefault()
+    {
+        var settings = JsonSerializer.Deserialize<AppSettings>("""
+            { "listenAddress": "127.0.0.1", "timeFormat": "HH:mm:ss" }
+            """, JsonDefaults.Options);
+        Assert.NotNull(settings);
+        Assert.Equal("전화수신알림", settings.NotificationText);
+        Assert.Equal(22, settings.PhoneFontSize);
+        Assert.True(settings.PhoneFontBold);
+        Assert.Equal(22, settings.TimeFontSize);
+        Assert.True(settings.TimeFontBold);
+        Assert.DoesNotContain("timeFormat", JsonSerializer.Serialize(settings, JsonDefaults.Options));
     }
     [Fact] public async Task SimultaneousDuplicatePersistsOnceAndSurvivesReopen()
     {
@@ -57,6 +124,28 @@ public class CoreTests
         await reopened.MarkShownAsync(value.EventId);
         Assert.False(await reopened.AcceptAsync(value with { EventId = value.EventId.ToUpperInvariant() }));
         Assert.Null(await reopened.NextAsync());
+    }
+    [Fact] public async Task NewNotificationInterruptsTheCurrentlyDisplayedNotification()
+    {
+        using var dir = new TestDirectory();
+        var store = new EventStore(System.IO.Path.Combine(dir.Path, "events.db"));
+        await store.InitializeAsync();
+        var presenter = new InterruptiblePopupPresenter();
+        var log = new RequestLog();
+        await using var manager = new NotificationManager(store, presenter, () => new AppSettings(), log);
+        manager.Start();
+        var first = CallEvent.Test();
+        await store.AcceptAsync(first);
+        manager.Wake();
+        Assert.True(await presenter.ShownSignal.WaitAsync(TimeSpan.FromSeconds(2)));
+
+        var second = CallEvent.Test();
+        await store.AcceptAsync(second);
+        manager.Wake();
+
+        await presenter.FirstInterrupted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        Assert.True(await presenter.ShownSignal.WaitAsync(TimeSpan.FromSeconds(2)));
+        Assert.Equal([first.EventId, second.EventId], presenter.ShownIds.ToArray());
     }
     [Fact] public async Task RetentionOnlyRemovesOldDisplayedEvents()
     {
@@ -136,6 +225,12 @@ public class CoreTests
         for (var i = 0; i < 220; i++) log.Add($"line\n{i}");
         Assert.Equal(200, log.Entries.Count);
         Assert.DoesNotContain('\n', log.Entries[0].Message);
+        Assert.Matches(@"^\d{4}\.\d{2}\.\d{2} \d{2}:\d{2}:\d{2}  line 219$", log.Snapshot()[0].ExportDisplay);
+        var cleared = false;
+        log.Cleared += () => cleared = true;
+        log.Clear();
+        Assert.True(cleared);
+        Assert.Empty(log.Entries);
     }
     [Fact] public void StartupRegistryRegistrationCanBeRestored()
     {

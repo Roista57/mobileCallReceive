@@ -6,12 +6,14 @@ namespace CallReceiver.Services;
 public sealed record LogEntry(DateTimeOffset Time, string Message)
 {
     public string Display => $"{Time:HH:mm:ss}  {Message}";
+    public string ExportDisplay => $"{Time:yyyy.MM.dd HH:mm:ss}  {Message}";
 }
 public sealed class RequestLog
 {
     private readonly Dispatcher? dispatcher;
     public ObservableCollection<LogEntry> Entries { get; } = [];
     public event Action<LogEntry>? Added;
+    public event Action? Cleared;
     public RequestLog(Dispatcher? dispatcher = null) { this.dispatcher = dispatcher; }
     public void Add(string text)
     {
@@ -25,5 +27,20 @@ public sealed class RequestLog
         if (dispatcher is not null && !dispatcher.CheckAccess()) dispatcher.BeginInvoke(Apply);
         else lock (Entries) Apply();
         System.Diagnostics.Debug.WriteLine(entry.Display);
+    }
+    public IReadOnlyList<LogEntry> Snapshot()
+    {
+        LogEntry[] Copy() { lock (Entries) return Entries.ToArray(); }
+        return dispatcher is not null && !dispatcher.CheckAccess() ? dispatcher.Invoke(Copy) : Copy();
+    }
+    public void Clear()
+    {
+        void Apply()
+        {
+            lock (Entries) Entries.Clear();
+            Cleared?.Invoke();
+        }
+        if (dispatcher is not null && !dispatcher.CheckAccess()) dispatcher.BeginInvoke(Apply);
+        else Apply();
     }
 }
