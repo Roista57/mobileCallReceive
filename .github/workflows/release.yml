@@ -186,7 +186,8 @@ jobs:
         env:
           RELEASE_VERSION: ${{ needs.metadata.outputs.version }}
         run: |
-          $publishDirectory = Join-Path $env:RUNNER_TEMP "CallReceiver-win-x64-$env:GITHUB_REF_NAME"
+          $publishDirectory = Join-Path $env:RUNNER_TEMP ("CallReceiver-publish-" + [guid]::NewGuid().ToString('N'))
+          New-Item -ItemType Directory -Path $publishDirectory -ErrorAction Stop | Out-Null
           $assetDirectory = Join-Path $env:RUNNER_TEMP "release-windows"
           New-Item -ItemType Directory -Force -Path $assetDirectory | Out-Null
           dotnet publish CallReceiver/CallReceiver/CallReceiver.csproj `
@@ -208,6 +209,14 @@ jobs:
             $_.Extension -in @('.jks', '.keystore', '.pfx', '.p12', '.trx')
           }
           if ($forbidden) { throw "Forbidden runtime/user files found: $($forbidden.FullName -join ', ')" }
+          $resources = @(Get-ChildItem -LiteralPath $publishDirectory -Recurse -File -Filter '*.resources.dll')
+          $unexpectedLanguages = @($resources | Where-Object { $_.Directory.Name -notin @('ko', 'en') })
+          if ($unexpectedLanguages.Count -gt 0) {
+            throw "Unexpected language resources: $($unexpectedLanguages.FullName -join ', ')"
+          }
+          if (-not ($resources | Where-Object { $_.Directory.Name -eq 'ko' })) {
+            throw "Korean language resources were not published"
+          }
           $zip = Join-Path $assetDirectory "CallReceiver-win-x64-$env:GITHUB_REF_NAME.zip"
           Compress-Archive -Path (Join-Path $publishDirectory '*') -DestinationPath $zip -CompressionLevel Optimal
 
