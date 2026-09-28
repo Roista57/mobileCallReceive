@@ -1,0 +1,20 @@
+<Project>
+  <UsingTask TaskName="BundleAudit" TaskFactory="RoslynCodeTaskFactory"
+             AssemblyFile="$(MSBuildToolsPath)/Microsoft.Build.Tasks.Core.dll">
+    <Task>
+      <Code Type="Class" Language="cs" Source="$(MSBuildThisFileDirectory)BundleAudit.cs" />
+    </Task>
+  </UsingTask>
+  <Target Name="AuditBundleInputs" AfterTargets="PrepareForBundle"
+          Condition="'$(PublishSingleFile)' == 'true'">
+    <Error Condition="'$(IncludeNativeLibrariesForSelfExtract)' == 'true' Or '$(IncludeAllContentForSelfExtract)' == 'true'"
+           Text="Native DLLs must remain external in this deployment." />
+    <BundleAudit Candidates="@(FilesToBundle)" External="@(ResolvedFileToPublish)"
+                 Report="$(IntermediateOutputPath)bundle-audit.tsv" />
+  </Target>
+  <Target Name="AuditBundleOutput" AfterTargets="Publish"
+          Condition="'$(PublishSingleFile)' == 'true'">
+    <BundleAudit Report="$(IntermediateOutputPath)bundle-audit.tsv"
+                 PublishDirectory="$(PublishDir)" Executable="$(AssemblyName).exe" />
+  </Target>
+</Project>

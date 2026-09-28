@@ -28,9 +28,30 @@ dotnet publish CallReceiver\CallReceiver.csproj -c Release -r win-x64 --self-con
 
 배포 실행 파일은 `artifacts\win-x64\CallReceiver.exe`입니다.
 
-언어별 리소스는 프로젝트의 `SatelliteResourceLanguages=ko;en` 설정으로 한국어와 영어만 포함합니다. 영어 기본 리소스는 본체 DLL에 포함될 수 있으므로 별도의 `en` 폴더가 없어도 정상입니다. 앱 화면 번역이나 언어 선택 기능을 추가하는 설정은 아닙니다.
+관리 DLL(앱·WPF·HTTP·SQLite 연결 코드)과 한국어·영어 리소스는 .NET SDK 번들 기능으로 `CallReceiver.exe`에 포함합니다. 네이티브 DLL과 PDB는 SDK publish 결과대로 외부에 둡니다. .NET 별도 설치는 필요 없지만 **EXE만 복사하면 안 됩니다. ZIP 전체를 함께 배포해야 합니다.** trimming과 네이티브 라이브러리 자동 추출은 사용하지 않습니다. SDK가 `.deps.json`과 `.runtimeconfig.json`도 처리합니다.
 
-로컬 publish 출력은 새 빈 폴더를 사용하세요. 기존 폴더에 다시 publish하거나 새 ZIP을 덮어 풀면 이전 언어 폴더가 남을 수 있습니다. Release는 매번 새 출력 폴더를 만들고 한국어 리소스 존재 및 다른 언어 리소스 부재를 검사한 뒤 ZIP을 생성합니다. 새 ZIP도 빈 폴더에 압축 해제하세요. 기존 사용자 설정과 DB는 별도로 보존해야 합니다.
+언어별 리소스는 `SatelliteResourceLanguages=ko;en`으로 제한합니다. 한국어 리소스도 EXE 안에 있으므로 외부 `ko` 폴더가 없는 것이 정상이며 영어는 기본 리소스를 사용할 수 있습니다. 화면 문구와 언어 선택 동작을 변경하는 설정은 아닙니다. 설정 JSON과 이벤트 DB는 기존대로 외부에 저장하며, `AppContext.BaseDirectory`와 `Environment.ProcessPath`로 실행 파일 기준 경로를 유지합니다.
+
+로컬 publish 출력은 새 빈 폴더를 사용하세요. 기존 폴더에 다시 publish하거나 새 ZIP을 덮어 풀면 이전 관리 DLL과 언어 폴더가 남을 수 있습니다. 새 ZIP도 빈 폴더에 압축 해제하세요. 기존 사용자 설정과 DB는 별도로 보존해야 합니다.
+
+Release는 매번 새 출력 폴더를 만듭니다. 프로젝트에 연결된 `tools/BundleAudit.targets`가 SDK의 번들 입력 목록과 PE 어셈블리 정보를 읽어 관리 DLL·한국어 리소스의 번들 후보 포함, 허용 언어, 네이티브 DLL의 외부 유지 설정을 검사합니다. publish 후에는 외부 관리 DLL 잔존과 필요한 네이티브 DLL 누락을 검사합니다. 검사 보고서는 `obj/Release/net10.0-windows/win-x64/bundle-audit.tsv`에 기록하며 배포에는 넣지 않습니다.
+
+번들 검증 결과(2026-09-28): Release 비 UI 테스트 25개 통과, 번들 입력 관리 DLL 370개·한국어 리소스 17개 확인, 외부 네이티브 DLL 7개 확인. 동일 소스의 기존 폴더형과 새 배포를 빈 디렉터리에 생성하고 동일 ZIP 도구로 비교한 결과는 다음과 같습니다. SDK가 번들용 런타임 자산을 선택하므로 기존 DLL을 단순 연결한 것과 크기가 다를 수 있습니다.
+
+| 항목 | 기존 폴더형 | 관리 DLL 번들 |
+|---|---:|---:|
+| 파일 수 | 413 | 9 |
+| EXE 크기(바이트) | 162,304 | 175,545,591 |
+| 전체 크기(바이트) | 193,194,171 | 186,355,427 |
+| ZIP 크기(바이트) | 84,207,478 | 80,020,709 |
+
+ZIP의 모든 파일을 publish 폴더와 해시로 대조했습니다. 검사 실패 조건은 아래 스크립트로 임시 폴더에서 검증하며 앱을 실행하지 않습니다. 인자는 `-p:PublishSingleFile=false`로 생성한 동일 버전의 폴더형 publish 경로입니다.
+
+```powershell
+./tools/Test-BundleAudit.ps1 -FolderPublish ./artifacts/folder-baseline
+```
+
+누락된 한국어 리소스, 명시적으로 번들에서 제외된 관리 DLL, 외부 네이티브 DLL 누락, 관리 DLL 외부 잔존에 대한 실패 검사가 통과했습니다. 단일 파일 호환성 경고는 이번 publish에서 발생하지 않았습니다. 실제 배포 EXE의 HTTP 접수·SQLite 저장·팝업·트레이·한국어 리소스 로딩·설정 경로·자동 실행과 GitHub Release는 미검증입니다. 정적 검사만으로 실제 실행 성공을 보장하지 않습니다.
 
 언어 제한 검증 결과(2026-09-28): Release 빌드와 비 UI 테스트 25개가 통과했습니다. 동일 소스를 각각 빈 폴더에 win-x64 self-contained publish한 결과, 전체 파일 크기는 209,748,455바이트에서 193,194,167바이트로, ZIP은 87,141,124바이트에서 81,430,047바이트로 감소했습니다. ZIP의 한국어 리소스 17개와 실행 파일·본체 DLL·필수 런타임을 확인했으며 다른 언어 리소스는 없었습니다. 영어는 본체의 기본 리소스를 사용합니다. 앱을 실행하지 않았으므로 한국어·영어 Windows의 실제 UI 동작 및 GitHub Release 실행 결과는 미검증입니다. 용량은 SDK 및 의존성 버전에 따라 달라집니다.
 

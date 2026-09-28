@@ -195,7 +195,6 @@ jobs:
             --runtime win-x64 `
             --self-contained true `
             --output $publishDirectory `
-            -p:PublishSingleFile=false `
             -p:PublishTrimmed=false
           if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed" }
           $exe = Join-Path $publishDirectory "CallReceiver.exe"
@@ -209,14 +208,7 @@ jobs:
             $_.Extension -in @('.jks', '.keystore', '.pfx', '.p12', '.trx')
           }
           if ($forbidden) { throw "Forbidden runtime/user files found: $($forbidden.FullName -join ', ')" }
-          $resources = @(Get-ChildItem -LiteralPath $publishDirectory -Recurse -File -Filter '*.resources.dll')
-          $unexpectedLanguages = @($resources | Where-Object { $_.Directory.Name -notin @('ko', 'en') })
-          if ($unexpectedLanguages.Count -gt 0) {
-            throw "Unexpected language resources: $($unexpectedLanguages.FullName -join ', ')"
-          }
-          if (-not ($resources | Where-Object { $_.Directory.Name -eq 'ko' })) {
-            throw "Korean language resources were not published"
-          }
+          # The project's BundleAudit targets validate SDK inputs and external native DLLs.
           $zip = Join-Path $assetDirectory "CallReceiver-win-x64-$env:GITHUB_REF_NAME.zip"
           Compress-Archive -Path (Join-Path $publishDirectory '*') -DestinationPath $zip -CompressionLevel Optimal
 
