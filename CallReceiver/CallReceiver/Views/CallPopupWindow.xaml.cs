@@ -21,7 +21,7 @@ public partial class CallPopupWindow : Window
         bounds = MonitorService.Clamp(monitor, settings.PopupX, settings.PopupY, settings.PopupWidth, settings.PopupHeight);
         var number = PhoneText.Format(value.PhoneNumber);
         var time = value.ReceivedAt.ToLocalTime().ToString("yyyy.MM.dd HH:mm:ss");
-        TitleText.Text = $"{settings.NotificationText} {number}";
+        TitleText.Text = $"{settings.NotificationText} {number} {value.ReceivedAt.ToLocalTime():HH:mm:ss}";
         Title = TitleText.Text;
         NumberText.Text = $"전화번호: {number}";
         TimeText.Text = $"수신시간: {time}";

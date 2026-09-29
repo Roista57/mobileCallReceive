@@ -107,11 +107,12 @@ public sealed class WpfUiTests
             await WaitUntil(() => !model.IsBusy);
             Assert.Contains("HTTP 서버 정상", model.Message);
             var stopwatch = Stopwatch.StartNew();
-            var received = CallEvent.Test() with { IsTest = isTest };
+            var localReceived = DateTimeOffset.Now.Date.AddHours(isTest ? 9 : 14).AddMinutes(30).AddSeconds(25);
+            var received = CallEvent.Test() with { IsTest = isTest, ReceivedAt = new DateTimeOffset(localReceived) };
             Assert.Equal(received.EventId, await new HttpSelfTest().SendAsync(initial, received));
             await WaitUntil(() => OpenWindows<CallPopupWindow>().Length == 1);
             var popup = Assert.Single(OpenWindows<CallPopupWindow>());
-            var expectedTitle = $"{initial.NotificationText} {received.PhoneNumber}";
+            var expectedTitle = $"{initial.NotificationText} {received.PhoneNumber} {(isTest ? "09:30:25" : "14:30:25")}";
             Assert.Equal(expectedTitle, popup.Title);
             Assert.Equal(expectedTitle, ((System.Windows.Controls.TextBlock)popup.FindName("TitleText")).Text);
             var numberText = (System.Windows.Controls.TextBlock)popup.FindName("NumberText");

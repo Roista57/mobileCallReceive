@@ -32,7 +32,7 @@ public static class McsWindows {
         EnumWindows((h,p) => {
             uint process; GetWindowThreadProcessId(h, out process);
             var title = new StringBuilder(256); GetWindowText(h,title,256);
-            if (process == processId && IsWindowVisible(h) && title.ToString().EndsWith(" 01012345678")) found.Add(h.ToInt64());
+            if (process == processId && IsWindowVisible(h) && System.Text.RegularExpressions.Regex.IsMatch(title.ToString(), @" 01012345678 (?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]$")) found.Add(h.ToInt64());
             return true;
         }, IntPtr.Zero);
         return found.ToArray();
