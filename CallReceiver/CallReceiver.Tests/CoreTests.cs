@@ -63,6 +63,16 @@ public class CoreTests
     {
         var s = new AppSettings();
         Assert.Null(s.Validate());
+        Assert.Null((s with { PopupWidth = 1, PopupHeight = 1 }).Validate());
+        Assert.NotNull((s with { PopupWidth = 0 }).Validate());
+        Assert.NotNull((s with { PopupHeight = 0 }).Validate());
+        Assert.Null((s with { PopupWidth = 2000, PopupHeight = 1200 }).Validate());
+        Assert.NotNull((s with { PopupWidth = 2001 }).Validate());
+        Assert.NotNull((s with { PopupHeight = 1201 }).Validate());
+        Assert.NotNull((s with { TestPhoneNumber = "" }).Validate());
+        Assert.NotNull((s with { TestPhoneNumber = new string('1', 129) }).Validate());
+        Assert.NotNull((s with { ServerFontSize = 7 }).Validate());
+        Assert.NotNull((s with { ServerFontSize = 101 }).Validate());
         Assert.NotNull((s with { ListenAddress = "0.0.0.0" }).Validate());
         Assert.NotNull((s with { ListenPort = 0 }).Validate());
         Assert.NotNull((s with { ApiPath = "api/call" }).Validate());
@@ -84,7 +94,7 @@ public class CoreTests
         using var dir = new TestDirectory();
         var service = new SettingsService(dir.Path);
         var first = new AppSettings { NotificationText = "테스트 알림", PhoneFontSize = 18,
-            PhoneFontBold = false, TimeFontSize = 27, TimeFontBold = true };
+            PhoneFontBold = false, TimeFontSize = 27, TimeFontBold = true, TestPhoneNumber = "0212345678", ServerFontSize = 16, ServerFontBold = true };
         Assert.True((await service.LoadAsync(first)).FirstRun);
         await service.SaveAsync(first);
         await service.SaveAsync(first with { ListenPort = 19000 });
@@ -109,6 +119,9 @@ public class CoreTests
         Assert.True(settings.PhoneFontBold);
         Assert.Equal(22, settings.TimeFontSize);
         Assert.True(settings.TimeFontBold);
+        Assert.Equal("01012345678", settings.TestPhoneNumber);
+        Assert.Equal(12, settings.ServerFontSize);
+        Assert.False(settings.ServerFontBold);
         Assert.DoesNotContain("timeFormat", JsonSerializer.Serialize(settings, JsonDefaults.Options));
     }
     [Fact] public async Task SimultaneousDuplicatePersistsOnceAndSurvivesReopen()

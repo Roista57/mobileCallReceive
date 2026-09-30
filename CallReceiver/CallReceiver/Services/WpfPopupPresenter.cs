@@ -4,7 +4,7 @@ using CallReceiver.Views;
 
 namespace CallReceiver.Services;
 
-public sealed class WpfPopupPresenter(Dispatcher dispatcher, RequestLog log) : IPopupPresenter
+public sealed class WpfPopupPresenter(Dispatcher dispatcher, RequestLog log, Func<AppSettings>? serverSettings = null) : IPopupPresenter
 {
     public Task ShowAsync(CallEvent value, AppSettings settings, Func<Task> onShown, CancellationToken token) =>
         dispatcher.InvokeAsync(async () =>
@@ -16,7 +16,12 @@ public sealed class WpfPopupPresenter(Dispatcher dispatcher, RequestLog log) : I
                 monitor = MonitorService.Primary();
                 log.Add("선택한 모니터가 없어 기본 모니터에 알림을 표시합니다.");
             }
-            var window = new CallPopupWindow(value, settings, monitor);
+            var endpoint = serverSettings?.Invoke() ?? settings;
+            var window = new CallPopupWindow(value, settings with
+            {
+                ListenAddress = endpoint.ListenAddress,
+                ListenPort = endpoint.ListenPort
+            }, monitor);
             try
             {
                 window.Show();

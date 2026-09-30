@@ -254,6 +254,12 @@ public sealed class MainViewModel : INotifyPropertyChanged
     public string PopupHeight { get => _PopupHeight; set { _PopupHeight = value; Raise(); Raise(nameof(DirtyText)); } }
     private string _DisplayDurationSeconds = "5";
     public string DisplayDurationSeconds { get => _DisplayDurationSeconds; set { _DisplayDurationSeconds = value; Raise(); Raise(nameof(DirtyText)); } }
+    private string _TestPhoneNumber = "01012345678";
+    public string TestPhoneNumber { get => _TestPhoneNumber; set { _TestPhoneNumber = value; Raise(); Raise(nameof(DirtyText)); } }
+    private string _ServerFontSize = "12";
+    public string ServerFontSize { get => _ServerFontSize; set { _ServerFontSize = value; Raise(); Raise(nameof(DirtyText)); } }
+    private string _ServerFontWeight = "Normal";
+    public string ServerFontWeight { get => _ServerFontWeight; set { _ServerFontWeight = value; Raise(); Raise(nameof(DirtyText)); } }
     private string _NotificationText = "전화수신알림";
     public string NotificationText { get => _NotificationText; set { _NotificationText = value; Raise(); Raise(nameof(DirtyText)); } }
     private string _PhoneFontSize = "22";
@@ -284,6 +290,9 @@ public sealed class MainViewModel : INotifyPropertyChanged
         PopupHeight = s.PopupHeight.ToString(System.Globalization.CultureInfo.InvariantCulture);
         DisplayDurationSeconds = s.DisplayDurationSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture);
         NotificationText = s.NotificationText;
+        TestPhoneNumber = s.TestPhoneNumber;
+        ServerFontSize = s.ServerFontSize.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        ServerFontWeight = s.ServerFontBold ? "Bold" : "Normal";
         PhoneFontSize = s.PhoneFontSize.ToString(System.Globalization.CultureInfo.InvariantCulture);
         PhoneFontWeight = s.PhoneFontBold ? "Bold" : "Normal";
         TimeFontSize = s.TimeFontSize.ToString(System.Globalization.CultureInfo.InvariantCulture);
@@ -307,6 +316,9 @@ public sealed class MainViewModel : INotifyPropertyChanged
             PopupHeight = Number(PopupHeight),
             DisplayDurationSeconds = Number(DisplayDurationSeconds),
             NotificationText = NotificationText,
+            TestPhoneNumber = TestPhoneNumber,
+            ServerFontSize = Number(ServerFontSize),
+            ServerFontBold = ServerFontWeight == "Bold",
             PhoneFontSize = Number(PhoneFontSize),
             PhoneFontBold = PhoneFontWeight == "Bold",
             TimeFontSize = Number(TimeFontSize),

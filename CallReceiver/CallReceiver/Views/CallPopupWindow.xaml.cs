@@ -25,6 +25,9 @@ public partial class CallPopupWindow : Window
         Title = TitleText.Text;
         NumberText.Text = $"전화번호: {number}";
         TimeText.Text = $"수신시간: {time}";
+        ServerText.Text = $"{settings.ListenAddress}:{settings.ListenPort}";
+        ServerText.FontSize = settings.ServerFontSize;
+        ServerText.FontWeight = settings.ServerFontBold ? FontWeights.Bold : FontWeights.Normal;
         NumberText.FontSize = settings.PhoneFontSize;
         NumberText.FontWeight = settings.PhoneFontBold ? FontWeights.Bold : FontWeights.Normal;
         TimeText.FontSize = settings.TimeFontSize;

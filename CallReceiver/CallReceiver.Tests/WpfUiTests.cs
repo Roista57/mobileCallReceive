@@ -68,7 +68,7 @@ public sealed class WpfUiTests
         var log = new RequestLog(Dispatcher.CurrentDispatcher);
         MainViewModel? model = null;
         await using var manager = new NotificationManager(f.Store,
-            new WpfPopupPresenter(Dispatcher.CurrentDispatcher, log), () => model?.Saved ?? initial, log);
+            new WpfPopupPresenter(Dispatcher.CurrentDispatcher, log, () => f.Server.RunningSettings ?? model?.Saved ?? initial), () => model?.Saved ?? initial, log);
         model = new MainViewModel(initial, settingsService, locationService, f.Server, f.Store, manager,
             new StartupService("MCS_UiTest_" + Guid.NewGuid()), log, Dispatcher.CurrentDispatcher,
             () => initial.ListenAddress, (_, _) => true, () => exportedLog);
@@ -123,6 +123,10 @@ public sealed class WpfUiTests
             Assert.Equal(System.Windows.FontWeights.Normal, numberText.FontWeight);
             Assert.Equal(27, timeText.FontSize);
             Assert.Equal(System.Windows.FontWeights.Bold, timeText.FontWeight);
+            var serverText = (System.Windows.Controls.TextBlock)popup.FindName("ServerText");
+            Assert.Equal($"{initial.ListenAddress}:{initial.ListenPort}", serverText.Text);
+            Assert.Equal(12, serverText.FontSize);
+            Assert.Equal(FontWeights.Normal, serverText.FontWeight);
             Assert.False(popup.ShowInTaskbar);
             Assert.False(popup.ShowActivated);
             Assert.True(popup.Topmost);
@@ -137,11 +141,20 @@ public sealed class WpfUiTests
             Assert.Equal(0, await f.Store.PendingCountAsync());
 
             // A location preview uses the draft values, stays on-screen, and does not go through HTTP.
+            model.TestPhoneNumber = "0212345678";
+            model.ServerFontSize = "16";
+            model.ServerFontWeight = "Bold";
+            model.ListenAddress = "203.0.113.10";
             model.PopupX = "999999"; model.PopupY = "-50"; model.TopMost = false;
             model.PreviewCommand.Execute(null);
             await WaitUntil(() => OpenWindows<CallPopupWindow>().Length == 1);
             popup = Assert.Single(OpenWindows<CallPopupWindow>());
             Assert.False(popup.Topmost);
+            Assert.Equal("전화번호: 0212345678", ((System.Windows.Controls.TextBlock)popup.FindName("NumberText")).Text);
+            var previewServer = (System.Windows.Controls.TextBlock)popup.FindName("ServerText");
+            Assert.Equal($"{initial.ListenAddress}:{initial.ListenPort}", previewServer.Text);
+            Assert.Equal(16, previewServer.FontSize);
+            Assert.Equal(FontWeights.Bold, previewServer.FontWeight);
             GetWindowRect(new WindowInteropHelper(popup).Handle, out rectangle);
             Assert.True(rectangle.Left >= monitor.Left && rectangle.Right <= monitor.Left + monitor.Width + 2);
             Assert.InRange(rectangle.Top, monitor.Top - 2, monitor.Top + 2);

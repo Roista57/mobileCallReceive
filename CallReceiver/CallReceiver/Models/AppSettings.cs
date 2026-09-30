@@ -19,6 +19,9 @@ public sealed record AppSettings
     public bool PhoneFontBold { get; init; } = true;
     public double TimeFontSize { get; init; } = 22;
     public bool TimeFontBold { get; init; } = true;
+    public string TestPhoneNumber { get; init; } = "01012345678";
+    public double ServerFontSize { get; init; } = 12;
+    public bool ServerFontBold { get; init; } = false;
     public bool TopMost { get; init; } = true;
     public bool PlaySound { get; init; } = true;
     public bool StartWithWindows { get; init; }
@@ -35,9 +38,9 @@ public sealed record AppSettings
             ApiPath.StartsWith("//") || ApiPath.Any(c => !(char.IsAsciiLetterOrDigit(c) || c is '/' or '_' or '-')))
             return "API Path는 /로 시작하고 영문, 숫자, /, _, -만 사용할 수 있습니다.";
         if (!double.IsFinite(PopupX) || !double.IsFinite(PopupY)) return "X/Y는 유효한 숫자여야 합니다.";
-        if (!double.IsFinite(PopupWidth) || PopupWidth is < 240 or > 2000 ||
-            !double.IsFinite(PopupHeight) || PopupHeight is < 120 or > 1200)
-            return "팝업 크기는 Width 240~2000, Height 120~1200 DIP 범위입니다.";
+        if (!double.IsFinite(PopupWidth) || PopupWidth is < 1 or > 2000 ||
+            !double.IsFinite(PopupHeight) || PopupHeight is < 1 or > 1200)
+            return "팝업 크기는 Width 1~2000, Height 1~1200 DIP 범위입니다.";
         if (!double.IsFinite(DisplayDurationSeconds) || DisplayDurationSeconds is < 1 or > 9999)
             return "표시 시간은 1~9999초입니다.";
         if (string.IsNullOrWhiteSpace(NotificationText) || NotificationText.Length > 100)
@@ -46,6 +49,10 @@ public sealed record AppSettings
             return "전화번호 글꼴 크기는 8~100이어야 합니다.";
         if (!double.IsFinite(TimeFontSize) || TimeFontSize is < 8 or > 100)
             return "수신시간 글꼴 크기는 8~100이어야 합니다.";
+        if (string.IsNullOrWhiteSpace(TestPhoneNumber) || TestPhoneNumber.Length > 128)
+            return "테스트 전화번호는 1~128자로 입력하세요.";
+        if (!double.IsFinite(ServerFontSize) || ServerFontSize is < 8 or > 100)
+            return "서버 주소 글꼴 크기는 8~100이어야 합니다.";
         return null;
     }
 }

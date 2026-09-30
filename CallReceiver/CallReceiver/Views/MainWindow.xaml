@@ -15,7 +15,7 @@
      <StackPanel Margin="10">
       <GroupBox Header="HTTP 서버 상태" Margin="0,0,0,10">
        <Grid Margin="8">
-        <Grid.ColumnDefinitions><ColumnDefinition Width="130"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+        <Grid.ColumnDefinitions><ColumnDefinition Width="160"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
         <Grid.RowDefinitions><RowDefinition/><RowDefinition/></Grid.RowDefinitions>
         <Label Content="상태"/><TextBlock Grid.Column="1" Text="{Binding ServerStatus}" FontWeight="Bold" VerticalAlignment="Center"/>
         <Label x:Name="CurrentAddressLabel" Grid.Row="1" Content="현재 주소"/><TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding Listening}" VerticalAlignment="Center"/>
@@ -23,11 +23,11 @@
       </GroupBox>
       <GroupBox Header="수신 설정">
        <Grid Margin="8">
-        <Grid.ColumnDefinitions><ColumnDefinition Width="130"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+        <Grid.ColumnDefinitions><ColumnDefinition Width="160"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
         <Grid.RowDefinitions><RowDefinition/><RowDefinition/><RowDefinition/></Grid.RowDefinitions>
         <Label Content="PC IPv4"/><TextBox Grid.Column="1" Text="{Binding ListenAddress, UpdateSourceTrigger=PropertyChanged}" Margin="4"/>
-        <Label Grid.Row="1" Content="Port"/><TextBox Grid.Row="1" Grid.Column="1" Text="{Binding ListenPort, UpdateSourceTrigger=PropertyChanged}" Margin="4"/>
-        <Label Grid.Row="2" Content="API Path"/><TextBox Grid.Row="2" Grid.Column="1" Text="{Binding ApiPath, UpdateSourceTrigger=PropertyChanged}" Margin="4"/>
+        <Label Grid.Row="1" Content="Port (1~65535)"/><TextBox Grid.Row="1" Grid.Column="1" Text="{Binding ListenPort, UpdateSourceTrigger=PropertyChanged}" Margin="4"/>
+        <Label Grid.Row="2" Content="API Path (1~200자)"/><TextBox Grid.Row="2" Grid.Column="1" Text="{Binding ApiPath, UpdateSourceTrigger=PropertyChanged}" Margin="4"/>
        </Grid>
       </GroupBox>
       <WrapPanel Margin="0,8,0,0">
@@ -45,26 +45,29 @@
      <StackPanel Margin="10">
       <GroupBox Header="위치와 크기">
        <Grid Margin="8">
-        <Grid.ColumnDefinitions><ColumnDefinition Width="130"/><ColumnDefinition Width="*"/><ColumnDefinition Width="130"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+        <Grid.ColumnDefinitions><ColumnDefinition Width="160"/><ColumnDefinition Width="*"/><ColumnDefinition Width="160"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
         <Grid.RowDefinitions><RowDefinition/><RowDefinition/><RowDefinition/></Grid.RowDefinitions>
         <Label Content="모니터"/><ComboBox Grid.Column="1" Grid.ColumnSpan="3" ItemsSource="{Binding Monitors}" DisplayMemberPath="Label" SelectedValuePath="Id" SelectedValue="{Binding Monitor}" Margin="4"/>
         <Label Grid.Row="1" Content="X"/><TextBox Grid.Row="1" Grid.Column="1" Text="{Binding PopupX, UpdateSourceTrigger=PropertyChanged}" Margin="4"/>
         <Label Grid.Row="1" Grid.Column="2" Content="Y"/><TextBox Grid.Row="1" Grid.Column="3" Text="{Binding PopupY, UpdateSourceTrigger=PropertyChanged}" Margin="4"/>
-        <Label Grid.Row="2" Content="Width"/><TextBox Grid.Row="2" Grid.Column="1" Text="{Binding PopupWidth, UpdateSourceTrigger=PropertyChanged}" Margin="4"/>
-        <Label Grid.Row="2" Grid.Column="2" Content="Height"/><TextBox Grid.Row="2" Grid.Column="3" Text="{Binding PopupHeight, UpdateSourceTrigger=PropertyChanged}" Margin="4"/>
+        <Label Grid.Row="2" Content="Width (1~2000)"/><TextBox Grid.Row="2" Grid.Column="1" Text="{Binding PopupWidth, UpdateSourceTrigger=PropertyChanged}" Margin="4"/>
+        <Label Grid.Row="2" Grid.Column="2" Content="Height (1~1200)"/><TextBox Grid.Row="2" Grid.Column="3" Text="{Binding PopupHeight, UpdateSourceTrigger=PropertyChanged}" Margin="4"/>
        </Grid>
       </GroupBox>
       <GroupBox Header="표시" Margin="0,10,0,0">
        <Grid Margin="8">
-        <Grid.ColumnDefinitions><ColumnDefinition Width="130"/><ColumnDefinition Width="100"/><ColumnDefinition Width="130"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-        <Grid.RowDefinitions><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/></Grid.RowDefinitions>
-        <Label Content="표시 시간(초)"/><TextBox Grid.Column="1" Grid.ColumnSpan="3" Text="{Binding DisplayDurationSeconds, UpdateSourceTrigger=PropertyChanged}" Margin="4"/>
-        <Label Grid.Row="1" Content="안내 문구"/><TextBox Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="3" Text="{Binding NotificationText, UpdateSourceTrigger=PropertyChanged}" Margin="4"/>
-        <Label Grid.Row="2" Content="전화번호 크기"/><TextBox x:Name="PhoneFontSizeBox" Grid.Row="2" Grid.Column="1" Width="56" MaxLength="3" HorizontalAlignment="Left" HorizontalContentAlignment="Right" Text="{Binding PhoneFontSize, UpdateSourceTrigger=PropertyChanged}" PreviewTextInput="IntegerTextInput" DataObject.Pasting="IntegerPaste" Margin="4"/>
+        <Grid.ColumnDefinitions><ColumnDefinition Width="160"/><ColumnDefinition Width="100"/><ColumnDefinition Width="160"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+        <Grid.RowDefinitions><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/></Grid.RowDefinitions>
+        <Label Content="표시 시간 (1~9999초)"/><TextBox Grid.Column="1" Grid.ColumnSpan="3" Text="{Binding DisplayDurationSeconds, UpdateSourceTrigger=PropertyChanged}" Margin="4"/>
+        <Label Grid.Row="1" Content="안내 문구 (1~100자)"/><TextBox Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="3" Text="{Binding NotificationText, UpdateSourceTrigger=PropertyChanged}" Margin="4"/>
+        <Label Grid.Row="2" Content="전화번호 크기 (8~100)"/><TextBox x:Name="PhoneFontSizeBox" Grid.Row="2" Grid.Column="1" Width="56" MaxLength="3" HorizontalAlignment="Left" HorizontalContentAlignment="Right" Text="{Binding PhoneFontSize, UpdateSourceTrigger=PropertyChanged}" PreviewTextInput="IntegerTextInput" DataObject.Pasting="IntegerPaste" Margin="4"/>
         <Label Grid.Row="2" Grid.Column="2" Content="전화번호 굵기"/><ComboBox x:Name="PhoneFontWeightBox" Grid.Row="2" Grid.Column="3" MinWidth="80" HorizontalAlignment="Left" SelectedValuePath="Content" SelectedValue="{Binding PhoneFontWeight}" Margin="4"><ComboBoxItem Content="Normal"/><ComboBoxItem Content="Bold"/></ComboBox>
-        <Label Grid.Row="3" Content="수신시간 크기"/><TextBox x:Name="TimeFontSizeBox" Grid.Row="3" Grid.Column="1" Width="56" MaxLength="3" HorizontalAlignment="Left" HorizontalContentAlignment="Right" Text="{Binding TimeFontSize, UpdateSourceTrigger=PropertyChanged}" PreviewTextInput="IntegerTextInput" DataObject.Pasting="IntegerPaste" Margin="4"/>
+        <Label Grid.Row="3" Content="수신시간 크기 (8~100)"/><TextBox x:Name="TimeFontSizeBox" Grid.Row="3" Grid.Column="1" Width="56" MaxLength="3" HorizontalAlignment="Left" HorizontalContentAlignment="Right" Text="{Binding TimeFontSize, UpdateSourceTrigger=PropertyChanged}" PreviewTextInput="IntegerTextInput" DataObject.Pasting="IntegerPaste" Margin="4"/>
         <Label Grid.Row="3" Grid.Column="2" Content="수신시간 굵기"/><ComboBox x:Name="TimeFontWeightBox" Grid.Row="3" Grid.Column="3" MinWidth="80" HorizontalAlignment="Left" SelectedValuePath="Content" SelectedValue="{Binding TimeFontWeight}" Margin="4"><ComboBoxItem Content="Normal"/><ComboBoxItem Content="Bold"/></ComboBox>
-        <StackPanel Grid.Row="4" Grid.Column="1" Grid.ColumnSpan="3" Orientation="Horizontal"><CheckBox Content="항상 위" IsChecked="{Binding TopMost}" Margin="4"/><CheckBox Content="알림음" IsChecked="{Binding PlaySound}" Margin="12,4,4,4"/></StackPanel>
+        <Label Grid.Row="4" Content="서버 주소 크기 (8~100)"/><TextBox Grid.Row="4" Grid.Column="1" Width="56" MaxLength="3" HorizontalAlignment="Left" HorizontalContentAlignment="Right" Text="{Binding ServerFontSize, UpdateSourceTrigger=PropertyChanged}" PreviewTextInput="IntegerTextInput" DataObject.Pasting="IntegerPaste" Margin="4"/>
+        <Label Grid.Row="4" Grid.Column="2" Content="서버 주소 굵기"/><ComboBox Grid.Row="4" Grid.Column="3" MinWidth="80" HorizontalAlignment="Left" SelectedValuePath="Content" SelectedValue="{Binding ServerFontWeight}" Margin="4"><ComboBoxItem Content="Normal"/><ComboBoxItem Content="Bold"/></ComboBox>
+        <Label Grid.Row="5"><TextBlock Text="테스트 전화번호 (1~128자)" TextWrapping="Wrap"/></Label><TextBox Grid.Row="5" Grid.Column="1" Grid.ColumnSpan="3" MaxLength="128" Text="{Binding TestPhoneNumber, UpdateSourceTrigger=PropertyChanged}" Margin="4"/>
+        <StackPanel Grid.Row="6" Grid.Column="1" Grid.ColumnSpan="3" Orientation="Horizontal"><CheckBox Content="항상 위" IsChecked="{Binding TopMost}" Margin="4"/><CheckBox Content="알림음" IsChecked="{Binding PlaySound}" Margin="12,4,4,4"/></StackPanel>
        </Grid>
       </GroupBox>
       <Button Content="알림 위치 테스트" Command="{Binding PreviewCommand}" HorizontalAlignment="Left" Margin="0,8,0,0"/>

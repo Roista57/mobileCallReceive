@@ -27,7 +27,7 @@ public sealed class NotificationManager(EventStore store, IPopupPresenter presen
     public void Preview(AppSettings value)
     {
         if (previews.Count >= 10) throw new InvalidOperationException("위치 테스트가 대기 중입니다. 잠시 기다려 주세요.");
-        previews.Enqueue((CallEvent.Test(), value));
+        previews.Enqueue((CallEvent.Test() with { PhoneNumber = value.TestPhoneNumber }, value));
         Wake();
     }
     private async Task RunAsync(CancellationToken token)
