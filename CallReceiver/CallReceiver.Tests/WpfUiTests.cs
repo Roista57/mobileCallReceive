@@ -50,6 +50,32 @@ public sealed class WpfUiTests
         while (!ready()) await Task.Delay(20, timeout.Token);
     }
 
+    [Fact] public Task HiddenLinesAndIndependentAlignment() => OnSta(() =>
+    {
+        foreach (var phoneSize in new[] { 0, 22 })
+        foreach (var timeSize in new[] { 0, 22 })
+        {
+            var popup = new CallPopupWindow(CallEvent.Test(), new AppSettings
+            {
+                PhoneFontSize = phoneSize, TimeFontSize = timeSize,
+                PhoneAlignment = "Center", TimeAlignment = "Right", PhonePrefix = "", TimePrefix = "시각 >"
+            }, MonitorService.Primary());
+            var phone = (System.Windows.Controls.TextBlock)popup.FindName("NumberText");
+            var time = (System.Windows.Controls.TextBlock)popup.FindName("TimeText");
+            var grid = (System.Windows.Controls.Grid)popup.FindName("BodyGrid");
+            Assert.Equal(phoneSize == 0 ? Visibility.Collapsed : Visibility.Visible, phone.Visibility);
+            Assert.Equal(timeSize == 0 ? Visibility.Collapsed : Visibility.Visible, time.Visibility);
+            if (phoneSize != 0) Assert.Equal(TextAlignment.Center, phone.TextAlignment);
+            if (timeSize != 0) Assert.Equal(TextAlignment.Right, time.TextAlignment);
+            Assert.Equal("01012345678", phone.Text);
+            Assert.StartsWith("시각 > ", time.Text);
+            Assert.Equal(1 + (phoneSize > 0 ? 2 : 0) + (timeSize > 0 ? 2 : 0), grid.RowDefinitions.Count);
+            Assert.Null(popup.FindName("ServerText"));
+            popup.Close();
+        }
+        return Task.CompletedTask;
+    });
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
@@ -68,7 +94,7 @@ public sealed class WpfUiTests
         var log = new RequestLog(Dispatcher.CurrentDispatcher);
         MainViewModel? model = null;
         await using var manager = new NotificationManager(f.Store,
-            new WpfPopupPresenter(Dispatcher.CurrentDispatcher, log, () => f.Server.RunningSettings ?? model?.Saved ?? initial), () => model?.Saved ?? initial, log);
+            new WpfPopupPresenter(Dispatcher.CurrentDispatcher, log), () => model?.Saved ?? initial, log);
         model = new MainViewModel(initial, settingsService, locationService, f.Server, f.Store, manager,
             new StartupService("MCS_UiTest_" + Guid.NewGuid()), log, Dispatcher.CurrentDispatcher,
             () => initial.ListenAddress, (_, _) => true, () => exportedLog);
@@ -112,7 +138,7 @@ public sealed class WpfUiTests
             Assert.Equal(received.EventId, await new HttpSelfTest().SendAsync(initial, received));
             await WaitUntil(() => OpenWindows<CallPopupWindow>().Length == 1);
             var popup = Assert.Single(OpenWindows<CallPopupWindow>());
-            var expectedTitle = $"{initial.NotificationText} {received.PhoneNumber} {(isTest ? "09:30:25" : "14:30:25")}";
+            var expectedTitle = $"{initial.NotificationText} {(isTest ? "09:30:25" : "14:30:25")} {received.PhoneNumber}";
             Assert.Equal(expectedTitle, popup.Title);
             Assert.Equal(expectedTitle, ((System.Windows.Controls.TextBlock)popup.FindName("TitleText")).Text);
             var numberText = (System.Windows.Controls.TextBlock)popup.FindName("NumberText");
@@ -123,10 +149,6 @@ public sealed class WpfUiTests
             Assert.Equal(System.Windows.FontWeights.Normal, numberText.FontWeight);
             Assert.Equal(27, timeText.FontSize);
             Assert.Equal(System.Windows.FontWeights.Bold, timeText.FontWeight);
-            var serverText = (System.Windows.Controls.TextBlock)popup.FindName("ServerText");
-            Assert.Equal($"{initial.ListenAddress}:{initial.ListenPort}", serverText.Text);
-            Assert.Equal(12, serverText.FontSize);
-            Assert.Equal(FontWeights.Normal, serverText.FontWeight);
             Assert.False(popup.ShowInTaskbar);
             Assert.False(popup.ShowActivated);
             Assert.True(popup.Topmost);
@@ -142,8 +164,8 @@ public sealed class WpfUiTests
 
             // A location preview uses the draft values, stays on-screen, and does not go through HTTP.
             model.TestPhoneNumber = "0212345678";
-            model.ServerFontSize = "16";
-            model.ServerFontWeight = "Bold";
+            model.TitleTimeFormat = "'TITLE' HH:mm";
+            model.BodyTimeFormat = "'BODY' yyyy/MM/dd";
             model.ListenAddress = "203.0.113.10";
             model.PopupX = "999999"; model.PopupY = "-50"; model.TopMost = false;
             model.PreviewCommand.Execute(null);
@@ -151,10 +173,10 @@ public sealed class WpfUiTests
             popup = Assert.Single(OpenWindows<CallPopupWindow>());
             Assert.False(popup.Topmost);
             Assert.Equal("전화번호: 0212345678", ((System.Windows.Controls.TextBlock)popup.FindName("NumberText")).Text);
-            var previewServer = (System.Windows.Controls.TextBlock)popup.FindName("ServerText");
-            Assert.Equal($"{initial.ListenAddress}:{initial.ListenPort}", previewServer.Text);
-            Assert.Equal(16, previewServer.FontSize);
-            Assert.Equal(FontWeights.Bold, previewServer.FontWeight);
+            Assert.Contains("TITLE", popup.Title);
+            Assert.Contains("BODY", ((System.Windows.Controls.TextBlock)popup.FindName("TimeText")).Text);
+            Assert.Contains("TITLE", model.TitleTimePreview);
+            Assert.Contains("BODY", model.BodyTimePreview);
             GetWindowRect(new WindowInteropHelper(popup).Handle, out rectangle);
             Assert.True(rectangle.Left >= monitor.Left && rectangle.Right <= monitor.Left + monitor.Width + 2);
             Assert.InRange(rectangle.Top, monitor.Top - 2, monitor.Top + 2);

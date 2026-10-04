@@ -6,6 +6,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.res.stringResource
+import net.onebell.mcs.R
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -47,6 +49,8 @@ fun SettingsScreen(state: SettingsState, viewModel: SettingsViewModel,
         OutlinedButton({ onAction(SettingsAction.TEST) }, enabled = usable, modifier = Modifier.fillMaxWidth()) { Text("테스트 전화 이벤트 전송") }
         if (state.busy) LinearProgressIndicator(Modifier.fillMaxWidth())
         TextButton(onPermissions) { Text("앱 권한 설정 열기") }
+        Text(stringResource(R.string.quick_guide_title), style = MaterialTheme.typography.titleSmall)
+        Text(stringResource(R.string.quick_guide_body), style = MaterialTheme.typography.bodySmall)
     }
 }
 

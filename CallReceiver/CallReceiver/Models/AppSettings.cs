@@ -20,8 +20,13 @@ public sealed record AppSettings
     public double TimeFontSize { get; init; } = 22;
     public bool TimeFontBold { get; init; } = true;
     public string TestPhoneNumber { get; init; } = "01012345678";
-    public double ServerFontSize { get; init; } = 12;
-    public bool ServerFontBold { get; init; } = false;
+    public string TitleTimeFormat { get; init; } = "HH:mm:ss";
+    public string BodyTimeFormat { get; init; } = "yyyy.MM.dd HH:mm:ss";
+    public string TitleOrder { get; init; } = "NoticeTimePhone";
+    public string PhonePrefix { get; init; } = "전화번호:";
+    public string TimePrefix { get; init; } = "수신시간:";
+    public string PhoneAlignment { get; init; } = "Left";
+    public string TimeAlignment { get; init; } = "Left";
     public bool TopMost { get; init; } = true;
     public bool PlaySound { get; init; } = true;
     public bool StartWithWindows { get; init; }
@@ -45,14 +50,20 @@ public sealed record AppSettings
             return "표시 시간은 1~9999초입니다.";
         if (string.IsNullOrWhiteSpace(NotificationText) || NotificationText.Length > 100)
             return "안내 문구는 1~100자로 입력하세요.";
-        if (!double.IsFinite(PhoneFontSize) || PhoneFontSize is < 8 or > 100)
-            return "전화번호 글꼴 크기는 8~100이어야 합니다.";
-        if (!double.IsFinite(TimeFontSize) || TimeFontSize is < 8 or > 100)
-            return "수신시간 글꼴 크기는 8~100이어야 합니다.";
+        if (!double.IsFinite(PhoneFontSize) || PhoneFontSize is < 0 or > 100)
+            return "전화번호 글꼴 크기는 0~100이어야 합니다.";
+        if (!double.IsFinite(TimeFontSize) || TimeFontSize is < 0 or > 100)
+            return "수신시간 글꼴 크기는 0~100이어야 합니다.";
         if (string.IsNullOrWhiteSpace(TestPhoneNumber) || TestPhoneNumber.Length > 128)
             return "테스트 전화번호는 1~128자로 입력하세요.";
-        if (!double.IsFinite(ServerFontSize) || ServerFontSize is < 8 or > 100)
-            return "서버 주소 글꼴 크기는 8~100이어야 합니다.";
+        if (!PopupText.TitleOrders.Contains(TitleOrder)) return "상단 순서를 선택하세요.";
+        if (!PopupText.Alignments.Contains(PhoneAlignment) || !PopupText.Alignments.Contains(TimeAlignment))
+            return "정렬을 선택하세요.";
+        if (PhonePrefix is null || TimePrefix is null || PhonePrefix.Length > 100 || TimePrefix.Length > 100 ||
+            PhonePrefix.Contains('\r') || PhonePrefix.Contains('\n') || TimePrefix.Contains('\r') || TimePrefix.Contains('\n'))
+            return "접두 문구는 0~100자의 한 줄로 입력하세요.";
+        if (!PopupText.ValidTimeFormat(TitleTimeFormat) || !PopupText.ValidTimeFormat(BodyTimeFormat))
+            return "시간 형식은 유효한 1~100자의 한 줄로 입력하세요.";
         return null;
     }
 }

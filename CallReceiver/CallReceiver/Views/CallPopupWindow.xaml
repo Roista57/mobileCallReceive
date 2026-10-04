@@ -5,20 +5,16 @@
  ShowActivated="False" Focusable="False">
  <Border BorderBrush="{DynamicResource {x:Static SystemColors.ActiveBorderBrushKey}}" BorderThickness="1" Padding="12">
   <Grid ClipToBounds="True">
-   <Grid.RowDefinitions>
-    <RowDefinition Height="Auto"/>
-    <RowDefinition Height="*"/>
-    <RowDefinition Height="Auto"/>
-    <RowDefinition Height="*"/>
-    <RowDefinition Height="Auto"/>
-    <RowDefinition Height="*"/>
-    <RowDefinition Height="Auto"/>
-   </Grid.RowDefinitions>
-   <TextBlock x:Name="TitleText"/>
-   <Button Content="X" HorizontalAlignment="Right" Focusable="False" Click="CloseClick" MinWidth="28"/>
-   <TextBlock x:Name="NumberText" Grid.Row="2" TextTrimming="CharacterEllipsis"/>
-   <TextBlock x:Name="TimeText" Grid.Row="4" TextTrimming="CharacterEllipsis"/>
-   <TextBlock x:Name="ServerText" Grid.Row="6" HorizontalAlignment="Left" VerticalAlignment="Bottom" TextTrimming="CharacterEllipsis"/>
+   <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+   <Grid>
+    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+    <TextBlock x:Name="TitleText" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+    <Button Grid.Column="1" Content="X" Focusable="False" Click="CloseClick" MinWidth="28"/>
+   </Grid>
+   <Grid x:Name="BodyGrid" Grid.Row="1" ClipToBounds="True">
+    <TextBlock x:Name="NumberText" TextTrimming="CharacterEllipsis"/>
+    <TextBlock x:Name="TimeText" TextTrimming="CharacterEllipsis"/>
+   </Grid>
   </Grid>
  </Border>
 </Window>

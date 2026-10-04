@@ -7,7 +7,7 @@ $dataDir = Join-Path $repo ('artifacts/smoke/' + [guid]::NewGuid().ToString())
 [System.IO.Directory]::CreateDirectory($dataDir) | Out-Null
 Add-Type -AssemblyName System.Windows.Forms
 $settings = @{
-    listenAddress='127.0.0.1'; listenPort=18080; notificationText='전화수신알림'
+    listenAddress='127.0.0.1'; listenPort=18080; notificationText='전화수신알림'; titleTimeFormat='HH:mm:ss'; bodyTimeFormat='yyyy.MM.dd HH:mm:ss'
     monitor=[System.Windows.Forms.Screen]::PrimaryScreen.DeviceName
     popupX=30; popupY=30; popupWidth=350; popupHeight=140
     displayDurationSeconds=3; topMost=$false; playSound=$false
@@ -32,7 +32,7 @@ public static class McsWindows {
         EnumWindows((h,p) => {
             uint process; GetWindowThreadProcessId(h, out process);
             var title = new StringBuilder(256); GetWindowText(h,title,256);
-            if (process == processId && IsWindowVisible(h) && System.Text.RegularExpressions.Regex.IsMatch(title.ToString(), @" 01012345678 (?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]$")) found.Add(h.ToInt64());
+            if (process == processId && IsWindowVisible(h) && System.Text.RegularExpressions.Regex.IsMatch(title.ToString(), @"^전화수신알림 (?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9] 01012345678$")) found.Add(h.ToInt64());
             return true;
         }, IntPtr.Zero);
         return found.ToArray();

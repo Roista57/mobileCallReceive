@@ -54,7 +54,7 @@ public partial class App : Application
             var log = new RequestLog(Dispatcher);
             server = new HttpServerService(store, log);
             MainViewModel? model = null;
-            notifications = new NotificationManager(store, new WpfPopupPresenter(Dispatcher, log, () => server.RunningSettings ?? model?.Saved ?? loaded.Settings),
+            notifications = new NotificationManager(store, new WpfPopupPresenter(Dispatcher, log),
                 () => model?.Saved ?? loaded.Settings, log);
             model = new MainViewModel(loaded.Settings, settings, location, server, store, notifications, new StartupService(), log, Dispatcher);
             window = new MainWindow(model, ExitAsync);

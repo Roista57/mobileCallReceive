@@ -20,18 +20,24 @@ public partial class CallPopupWindow : Window
         Width = settings.PopupWidth; Height = settings.PopupHeight; Topmost = settings.TopMost;
         bounds = MonitorService.Clamp(monitor, settings.PopupX, settings.PopupY, settings.PopupWidth, settings.PopupHeight);
         var number = PhoneText.Format(value.PhoneNumber);
-        var time = value.ReceivedAt.ToLocalTime().ToString("yyyy.MM.dd HH:mm:ss");
-        TitleText.Text = $"{settings.NotificationText} {number} {value.ReceivedAt.ToLocalTime():HH:mm:ss}";
+        var time = PopupText.FormatTime(value.ReceivedAt, settings.BodyTimeFormat);
+        TitleText.Text = PopupText.Title(value, settings);
         Title = TitleText.Text;
-        NumberText.Text = $"전화번호: {number}";
-        TimeText.Text = $"수신시간: {time}";
-        ServerText.Text = $"{settings.ListenAddress}:{settings.ListenPort}";
-        ServerText.FontSize = settings.ServerFontSize;
-        ServerText.FontWeight = settings.ServerFontBold ? FontWeights.Bold : FontWeights.Normal;
-        NumberText.FontSize = settings.PhoneFontSize;
-        NumberText.FontWeight = settings.PhoneFontBold ? FontWeights.Bold : FontWeights.Normal;
-        TimeText.FontSize = settings.TimeFontSize;
-        TimeText.FontWeight = settings.TimeFontBold ? FontWeights.Bold : FontWeights.Normal;
+        NumberText.Text = PopupText.Prefix(settings.PhonePrefix, number);
+        TimeText.Text = PopupText.Prefix(settings.TimePrefix, time);
+        BodyGrid.RowDefinitions.Add(new System.Windows.Controls.RowDefinition());
+        void AddLine(System.Windows.Controls.TextBlock line, double size, bool bold, string alignment)
+        {
+            if (size == 0) { line.Visibility = Visibility.Collapsed; return; }
+            line.FontSize = size;
+            line.FontWeight = bold ? FontWeights.Bold : FontWeights.Normal;
+            line.TextAlignment = Enum.Parse<TextAlignment>(alignment);
+            System.Windows.Controls.Grid.SetRow(line, BodyGrid.RowDefinitions.Count);
+            BodyGrid.RowDefinitions.Add(new System.Windows.Controls.RowDefinition { Height = GridLength.Auto });
+            BodyGrid.RowDefinitions.Add(new System.Windows.Controls.RowDefinition());
+        }
+        AddLine(NumberText, settings.PhoneFontSize, settings.PhoneFontBold, settings.PhoneAlignment);
+        AddLine(TimeText, settings.TimeFontSize, settings.TimeFontBold, settings.TimeAlignment);
         SourceInitialized += (_, _) =>
         {
             var handle = new WindowInteropHelper(this).Handle;

@@ -71,8 +71,6 @@ public class CoreTests
         Assert.NotNull((s with { PopupHeight = 1201 }).Validate());
         Assert.NotNull((s with { TestPhoneNumber = "" }).Validate());
         Assert.NotNull((s with { TestPhoneNumber = new string('1', 129) }).Validate());
-        Assert.NotNull((s with { ServerFontSize = 7 }).Validate());
-        Assert.NotNull((s with { ServerFontSize = 101 }).Validate());
         Assert.NotNull((s with { ListenAddress = "0.0.0.0" }).Validate());
         Assert.NotNull((s with { ListenPort = 0 }).Validate());
         Assert.NotNull((s with { ApiPath = "api/call" }).Validate());
@@ -80,9 +78,9 @@ public class CoreTests
         Assert.NotNull((s with { NotificationText = "" }).Validate());
         Assert.NotNull((s with { NotificationText = new string('가', 101) }).Validate());
         Assert.Null((s with { PhoneFontSize = 8, TimeFontSize = 100 }).Validate());
-        Assert.NotNull((s with { PhoneFontSize = 7 }).Validate());
+        Assert.NotNull((s with { PhoneFontSize = -1 }).Validate());
         Assert.NotNull((s with { PhoneFontSize = 101 }).Validate());
-        Assert.NotNull((s with { TimeFontSize = 7 }).Validate());
+        Assert.NotNull((s with { TimeFontSize = -1 }).Validate());
         Assert.NotNull((s with { TimeFontSize = 101 }).Validate());
         Assert.NotNull((s with { PopupWidth = double.NaN }).Validate());
         Assert.NotNull((s with { DisplayDurationSeconds = 0 }).Validate());
@@ -94,7 +92,7 @@ public class CoreTests
         using var dir = new TestDirectory();
         var service = new SettingsService(dir.Path);
         var first = new AppSettings { NotificationText = "테스트 알림", PhoneFontSize = 18,
-            PhoneFontBold = false, TimeFontSize = 27, TimeFontBold = true, TestPhoneNumber = "0212345678", ServerFontSize = 16, ServerFontBold = true };
+            PhoneFontBold = false, TimeFontSize = 27, TimeFontBold = true, TestPhoneNumber = "0212345678", PhonePrefix = "발신:", TimeAlignment = "Right" };
         Assert.True((await service.LoadAsync(first)).FirstRun);
         await service.SaveAsync(first);
         await service.SaveAsync(first with { ListenPort = 19000 });
@@ -120,8 +118,6 @@ public class CoreTests
         Assert.Equal(22, settings.TimeFontSize);
         Assert.True(settings.TimeFontBold);
         Assert.Equal("01012345678", settings.TestPhoneNumber);
-        Assert.Equal(12, settings.ServerFontSize);
-        Assert.False(settings.ServerFontBold);
         Assert.DoesNotContain("timeFormat", JsonSerializer.Serialize(settings, JsonDefaults.Options));
     }
     [Fact] public async Task SimultaneousDuplicatePersistsOnceAndSurvivesReopen()

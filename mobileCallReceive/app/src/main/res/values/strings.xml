@@ -1,3 +1,5 @@
 <resources>
     <string name="app_name">mobileCallReceive</string>
+    <string name="quick_guide_title">간단 사용법</string>
+    <string name="quick_guide_body">1. PC 프로그램을 실행하고 서버가 실행 중인지 확인하세요.\n2. 같은 네트워크에 연결한 뒤 휴대폰에 PC의 IP, Port, API Path를 입력하고 저장하세요.\n3. PC 연결 테스트와 테스트 전화 이벤트 전송으로 연결과 팝업을 확인하세요.\n4. 시작을 눌러 전화 감지 역할과 필요한 권한을 허용하세요.</string>
 </resources>

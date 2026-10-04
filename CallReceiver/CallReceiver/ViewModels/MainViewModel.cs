@@ -256,10 +256,24 @@ public sealed class MainViewModel : INotifyPropertyChanged
     public string DisplayDurationSeconds { get => _DisplayDurationSeconds; set { _DisplayDurationSeconds = value; Raise(); Raise(nameof(DirtyText)); } }
     private string _TestPhoneNumber = "01012345678";
     public string TestPhoneNumber { get => _TestPhoneNumber; set { _TestPhoneNumber = value; Raise(); Raise(nameof(DirtyText)); } }
-    private string _ServerFontSize = "12";
-    public string ServerFontSize { get => _ServerFontSize; set { _ServerFontSize = value; Raise(); Raise(nameof(DirtyText)); } }
-    private string _ServerFontWeight = "Normal";
-    public string ServerFontWeight { get => _ServerFontWeight; set { _ServerFontWeight = value; Raise(); Raise(nameof(DirtyText)); } }
+    public IReadOnlyList<string> TimeFormats { get; } =
+        ["HH:mm:ss", "HH:mm", "tt h:mm:ss", "yyyy.MM.dd HH:mm:ss", "yyyy-MM-dd HH:mm:ss"];
+    private string _TitleTimeFormat = "HH:mm:ss";
+    public string TitleTimeFormat { get => _TitleTimeFormat; set { _TitleTimeFormat = value; Raise(); Raise(nameof(TitleTimePreview)); Raise(nameof(DirtyText)); } }
+    private string _BodyTimeFormat = "yyyy.MM.dd HH:mm:ss";
+    public string BodyTimeFormat { get => _BodyTimeFormat; set { _BodyTimeFormat = value; Raise(); Raise(nameof(BodyTimePreview)); Raise(nameof(DirtyText)); } }
+    public string TitleTimePreview => PopupText.PreviewTime(TitleTimeFormat);
+    public string BodyTimePreview => PopupText.PreviewTime(BodyTimeFormat);
+    private string _TitleOrder = "NoticeTimePhone";
+    public string TitleOrder { get => _TitleOrder; set { _TitleOrder = value; Raise(); Raise(nameof(DirtyText)); } }
+    private string _PhonePrefix = "전화번호:";
+    public string PhonePrefix { get => _PhonePrefix; set { _PhonePrefix = value; Raise(); Raise(nameof(DirtyText)); } }
+    private string _TimePrefix = "수신시간:";
+    public string TimePrefix { get => _TimePrefix; set { _TimePrefix = value; Raise(); Raise(nameof(DirtyText)); } }
+    private string _PhoneAlignment = "Left";
+    public string PhoneAlignment { get => _PhoneAlignment; set { _PhoneAlignment = value; Raise(); Raise(nameof(DirtyText)); } }
+    private string _TimeAlignment = "Left";
+    public string TimeAlignment { get => _TimeAlignment; set { _TimeAlignment = value; Raise(); Raise(nameof(DirtyText)); } }
     private string _NotificationText = "전화수신알림";
     public string NotificationText { get => _NotificationText; set { _NotificationText = value; Raise(); Raise(nameof(DirtyText)); } }
     private string _PhoneFontSize = "22";
@@ -290,9 +304,14 @@ public sealed class MainViewModel : INotifyPropertyChanged
         PopupHeight = s.PopupHeight.ToString(System.Globalization.CultureInfo.InvariantCulture);
         DisplayDurationSeconds = s.DisplayDurationSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture);
         NotificationText = s.NotificationText;
+        TitleOrder = s.TitleOrder;
+        TitleTimeFormat = s.TitleTimeFormat;
+        BodyTimeFormat = s.BodyTimeFormat;
+        PhonePrefix = s.PhonePrefix;
+        TimePrefix = s.TimePrefix;
+        PhoneAlignment = s.PhoneAlignment;
+        TimeAlignment = s.TimeAlignment;
         TestPhoneNumber = s.TestPhoneNumber;
-        ServerFontSize = s.ServerFontSize.ToString(System.Globalization.CultureInfo.InvariantCulture);
-        ServerFontWeight = s.ServerFontBold ? "Bold" : "Normal";
         PhoneFontSize = s.PhoneFontSize.ToString(System.Globalization.CultureInfo.InvariantCulture);
         PhoneFontWeight = s.PhoneFontBold ? "Bold" : "Normal";
         TimeFontSize = s.TimeFontSize.ToString(System.Globalization.CultureInfo.InvariantCulture);
@@ -316,9 +335,14 @@ public sealed class MainViewModel : INotifyPropertyChanged
             PopupHeight = Number(PopupHeight),
             DisplayDurationSeconds = Number(DisplayDurationSeconds),
             NotificationText = NotificationText,
+            TitleOrder = TitleOrder,
+            TitleTimeFormat = TitleTimeFormat,
+            BodyTimeFormat = BodyTimeFormat,
+            PhonePrefix = PhonePrefix.Trim(),
+            TimePrefix = TimePrefix.Trim(),
+            PhoneAlignment = PhoneAlignment,
+            TimeAlignment = TimeAlignment,
             TestPhoneNumber = TestPhoneNumber,
-            ServerFontSize = Number(ServerFontSize),
-            ServerFontBold = ServerFontWeight == "Bold",
             PhoneFontSize = Number(PhoneFontSize),
             PhoneFontBold = PhoneFontWeight == "Bold",
             TimeFontSize = Number(TimeFontSize),
