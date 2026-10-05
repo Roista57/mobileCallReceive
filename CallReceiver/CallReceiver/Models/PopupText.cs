@@ -10,27 +10,19 @@ public static class PopupText
         try { _ = FormatTime(DateTimeOffset.Now, format); return true; }
         catch (FormatException) { return false; }
     }
-    public static string PreviewTime(string format) =>
-        ValidTimeFormat(format) ? FormatTime(DateTimeOffset.Now, format) : "잘못된 시간 형식";
-    public static readonly string[] TitleOrders = ["NoticeTimePhone", "NoticePhoneTime", "TimeNoticePhone",
-        "TimePhoneNotice", "PhoneNoticeTime", "PhoneTimeNotice"];
+    public static readonly string[] TitleItems = ["Notice", "Time", "Phone", "None"];
     public static readonly string[] Alignments = ["Left", "Center", "Right"];
     public static string Prefix(string prefix, string value) =>
         string.IsNullOrWhiteSpace(prefix) ? value : $"{prefix.Trim()} {value}";
     public static string Title(CallEvent value, AppSettings settings)
     {
-        var notice = settings.NotificationText;
-        var time = FormatTime(value.ReceivedAt, settings.TitleTimeFormat);
-        var phone = value.PhoneNumber;
-        return settings.TitleOrder switch
-        {
-            "NoticeTimePhone" => $"{notice} {time} {phone}",
-            "NoticePhoneTime" => $"{notice} {phone} {time}",
-            "TimeNoticePhone" => $"{time} {notice} {phone}",
-            "TimePhoneNotice" => $"{time} {phone} {notice}",
-            "PhoneNoticeTime" => $"{phone} {notice} {time}",
-            "PhoneTimeNotice" => $"{phone} {time} {notice}",
-            _ => throw new ArgumentException("상단 순서를 선택하세요.")
-        };
+        return string.Join(" ", new[] { settings.TitleItem1, settings.TitleItem2, settings.TitleItem3 }
+            .Where(item => item != "None").Select(item => item switch
+            {
+                "Notice" => settings.NotificationText,
+                "Time" => FormatTime(value.ReceivedAt, settings.TitleTimeFormat),
+                "Phone" => value.PhoneNumber,
+                _ => throw new ArgumentException("상단 항목을 선택하세요.")
+            }));
     }
 }

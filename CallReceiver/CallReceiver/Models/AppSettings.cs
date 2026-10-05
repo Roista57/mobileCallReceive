@@ -22,7 +22,9 @@ public sealed record AppSettings
     public string TestPhoneNumber { get; init; } = "01012345678";
     public string TitleTimeFormat { get; init; } = "HH:mm:ss";
     public string BodyTimeFormat { get; init; } = "yyyy.MM.dd HH:mm:ss";
-    public string TitleOrder { get; init; } = "NoticeTimePhone";
+    public string TitleItem1 { get; init; } = "Notice";
+    public string TitleItem2 { get; init; } = "Time";
+    public string TitleItem3 { get; init; } = "Phone";
     public string PhonePrefix { get; init; } = "전화번호:";
     public string TimePrefix { get; init; } = "수신시간:";
     public string PhoneAlignment { get; init; } = "Left";
@@ -56,7 +58,10 @@ public sealed record AppSettings
             return "수신시간 글꼴 크기는 0~100이어야 합니다.";
         if (string.IsNullOrWhiteSpace(TestPhoneNumber) || TestPhoneNumber.Length > 128)
             return "테스트 전화번호는 1~128자로 입력하세요.";
-        if (!PopupText.TitleOrders.Contains(TitleOrder)) return "상단 순서를 선택하세요.";
+        var titleItems = new[] { TitleItem1, TitleItem2, TitleItem3 };
+        if (titleItems.Any(item => !PopupText.TitleItems.Contains(item))) return "상단 항목을 선택하세요.";
+        var visibleItems = titleItems.Where(item => item != "None").ToArray();
+        if (visibleItems.Distinct().Count() != visibleItems.Length) return "상단 항목은 중복 선택할 수 없습니다.";
         if (!PopupText.Alignments.Contains(PhoneAlignment) || !PopupText.Alignments.Contains(TimeAlignment))
             return "정렬을 선택하세요.";
         if (PhonePrefix is null || TimePrefix is null || PhonePrefix.Length > 100 || TimePrefix.Length > 100 ||

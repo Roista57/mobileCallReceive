@@ -259,13 +259,44 @@ public sealed class MainViewModel : INotifyPropertyChanged
     public IReadOnlyList<string> TimeFormats { get; } =
         ["HH:mm:ss", "HH:mm", "tt h:mm:ss", "yyyy.MM.dd HH:mm:ss", "yyyy-MM-dd HH:mm:ss"];
     private string _TitleTimeFormat = "HH:mm:ss";
-    public string TitleTimeFormat { get => _TitleTimeFormat; set { _TitleTimeFormat = value; Raise(); Raise(nameof(TitleTimePreview)); Raise(nameof(DirtyText)); } }
+    public string TitleTimeFormat { get => _TitleTimeFormat; set { _TitleTimeFormat = value; Raise(); Raise(nameof(DirtyText)); } }
     private string _BodyTimeFormat = "yyyy.MM.dd HH:mm:ss";
-    public string BodyTimeFormat { get => _BodyTimeFormat; set { _BodyTimeFormat = value; Raise(); Raise(nameof(BodyTimePreview)); Raise(nameof(DirtyText)); } }
-    public string TitleTimePreview => PopupText.PreviewTime(TitleTimeFormat);
-    public string BodyTimePreview => PopupText.PreviewTime(BodyTimeFormat);
-    private string _TitleOrder = "NoticeTimePhone";
-    public string TitleOrder { get => _TitleOrder; set { _TitleOrder = value; Raise(); Raise(nameof(DirtyText)); } }
+    public string BodyTimeFormat { get => _BodyTimeFormat; set { _BodyTimeFormat = value; Raise(); Raise(nameof(DirtyText)); } }
+    public sealed class TitleChoice(string id, string label) : INotifyPropertyChanged
+    {
+        public string Id { get; } = id;
+        public string Label { get; } = label;
+        public bool IsEnabled { get; private set; } = true;
+        public event PropertyChangedEventHandler? PropertyChanged;
+        public void Update(bool enabled)
+        {
+            IsEnabled = enabled;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsEnabled)));
+        }
+    }
+    private static TitleChoice[] Choices() => [new("Notice", "안내 문구"), new("Time", "시간"), new("Phone", "전화번호"), new("None", "표시 안함")];
+    public TitleChoice[] TitleChoices1 { get; } = Choices();
+    public TitleChoice[] TitleChoices2 { get; } = Choices();
+    public TitleChoice[] TitleChoices3 { get; } = Choices();
+    private readonly string[] titleItems = ["Notice", "Time", "Phone"];
+    public string TitleItem1 { get => titleItems[0]; set => SetTitleItem(0, value); }
+    public string TitleItem2 { get => titleItems[1]; set => SetTitleItem(1, value); }
+    public string TitleItem3 { get => titleItems[2]; set => SetTitleItem(2, value); }
+    private void SetTitleItem(int index, string value)
+    {
+        if (!PopupText.TitleItems.Contains(value) || (value != "None" && titleItems.Where((_, i) => i != index).Contains(value))) return;
+        titleItems[index] = value;
+        Raise($"TitleItem{index + 1}");
+        RefreshTitleChoices();
+        Raise(nameof(DirtyText));
+    }
+    private void RefreshTitleChoices()
+    {
+        var choices = new[] { TitleChoices1, TitleChoices2, TitleChoices3 };
+        for (var i = 0; i < choices.Length; i++)
+            foreach (var choice in choices[i])
+                choice.Update(choice.Id == "None" || !titleItems.Where((_, index) => index != i).Contains(choice.Id));
+    }
     private string _PhonePrefix = "전화번호:";
     public string PhonePrefix { get => _PhonePrefix; set { _PhonePrefix = value; Raise(); Raise(nameof(DirtyText)); } }
     private string _TimePrefix = "수신시간:";
@@ -304,7 +335,9 @@ public sealed class MainViewModel : INotifyPropertyChanged
         PopupHeight = s.PopupHeight.ToString(System.Globalization.CultureInfo.InvariantCulture);
         DisplayDurationSeconds = s.DisplayDurationSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture);
         NotificationText = s.NotificationText;
-        TitleOrder = s.TitleOrder;
+        titleItems[0] = s.TitleItem1; titleItems[1] = s.TitleItem2; titleItems[2] = s.TitleItem3;
+        Raise(nameof(TitleItem1)); Raise(nameof(TitleItem2)); Raise(nameof(TitleItem3));
+        RefreshTitleChoices();
         TitleTimeFormat = s.TitleTimeFormat;
         BodyTimeFormat = s.BodyTimeFormat;
         PhonePrefix = s.PhonePrefix;
@@ -335,7 +368,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
             PopupHeight = Number(PopupHeight),
             DisplayDurationSeconds = Number(DisplayDurationSeconds),
             NotificationText = NotificationText,
-            TitleOrder = TitleOrder,
+            TitleItem1 = TitleItem1, TitleItem2 = TitleItem2, TitleItem3 = TitleItem3,
             TitleTimeFormat = TitleTimeFormat,
             BodyTimeFormat = BodyTimeFormat,
             PhonePrefix = PhonePrefix.Trim(),

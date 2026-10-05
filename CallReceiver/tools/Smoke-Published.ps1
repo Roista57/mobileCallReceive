@@ -1,4 +1,4 @@
-param([switch]$WaitForAndroid)
+﻿param([switch]$WaitForAndroid)
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path $PSScriptRoot -Parent
 $exe = Join-Path $repo 'artifacts/win-x64/CallReceiver.exe'
@@ -7,7 +7,7 @@ $dataDir = Join-Path $repo ('artifacts/smoke/' + [guid]::NewGuid().ToString())
 [System.IO.Directory]::CreateDirectory($dataDir) | Out-Null
 Add-Type -AssemblyName System.Windows.Forms
 $settings = @{
-    listenAddress='127.0.0.1'; listenPort=18080; notificationText='전화수신알림'; titleTimeFormat='HH:mm:ss'; bodyTimeFormat='yyyy.MM.dd HH:mm:ss'
+    listenAddress='127.0.0.1'; listenPort=18080; notificationText='전화수신알림'; titleItem1='Notice'; titleItem2='Time'; titleItem3='Phone'; titleTimeFormat='HH:mm:ss'; bodyTimeFormat='yyyy.MM.dd HH:mm:ss'
     monitor=[System.Windows.Forms.Screen]::PrimaryScreen.DeviceName
     popupX=30; popupY=30; popupWidth=350; popupHeight=140
     displayDurationSeconds=3; topMost=$false; playSound=$false

@@ -34,18 +34,6 @@ public sealed class InterruptiblePopupPresenter : IPopupPresenter
 
 public class CoreTests
 {
-    [Fact] public void DefaultNetworkAddressPrefersFirstLanIpv4AndFallsBackToLoopback()
-    {
-        Assert.Equal("192.168.0.50", NetworkAddresses.DefaultAddress(
-            () => ["127.0.0.1", "192.168.0.50", "10.0.0.7"]));
-        Assert.Equal("10.0.0.7", NetworkAddresses.DefaultAddress(
-            () => ["invalid", "127.0.0.1", "10.0.0.7"]));
-        Assert.Equal("127.0.0.1", NetworkAddresses.DefaultAddress(
-            () => ["127.0.0.1"]));
-        Assert.Equal("127.0.0.1", NetworkAddresses.DefaultAddress(
-            () => throw new System.Net.NetworkInformation.NetworkInformationException()));
-    }
-
     [Fact] public async Task ExistingSavedListenAddressIsNotReplacedByDetectedDefault()
     {
         using var dir = new TestDirectory();

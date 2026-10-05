@@ -50,7 +50,7 @@ fun SettingsScreen(state: SettingsState, viewModel: SettingsViewModel,
         if (state.busy) LinearProgressIndicator(Modifier.fillMaxWidth())
         TextButton(onPermissions) { Text("앱 권한 설정 열기") }
         Text(stringResource(R.string.quick_guide_title), style = MaterialTheme.typography.titleSmall)
-        Text(stringResource(R.string.quick_guide_body), style = MaterialTheme.typography.bodySmall)
+        Text(stringResource(R.string.quick_guide_body))
     }
 }
 
