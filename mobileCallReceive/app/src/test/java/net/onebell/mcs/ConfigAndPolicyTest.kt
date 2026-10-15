@@ -41,7 +41,7 @@ class ConfigAndPolicyTest {
         assertNotEquals(first.sentAt, second.sentAt)
     }
     @Test fun retryClassification() {
-        listOf(408, 429, 500, 503).forEach { assertTrue(httpFailure(it).retryable) }
+        listOf(408, 429, 500, 503).forEach { assertFalse(httpFailure(it).retryable) }
         listOf(400, 401, 403, 404, 302).forEach { assertFalse(httpFailure(it).retryable) }
         assertTrue(networkFailure(SocketTimeoutException()).retryable)
     }

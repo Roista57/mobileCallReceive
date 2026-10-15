@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Windows;
 using System.Windows.Input;
 using CallReceiver.ViewModels;
+using CallReceiver.Services;
 
 namespace CallReceiver.Views;
 
@@ -9,6 +10,7 @@ public partial class MainWindow : Window
 {
     private readonly MainViewModel model;
     private readonly Func<Task> exit;
+    private readonly Dictionary<string, RequestDetailWindow> detailWindows = [];
     public bool AllowClose { get; set; }
     public MainWindow(MainViewModel model, Func<Task> exit)
     {
@@ -25,6 +27,23 @@ public partial class MainWindow : Window
             else _ = exit();
         }
         base.OnClosing(e);
+    }
+    private void ShowLogDetail(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: LogEntry entry }) OpenLogDetail(entry);
+    }
+    public void OpenLogDetail(LogEntry entry)
+    {
+        if (detailWindows.TryGetValue(entry.Id, out var existing)) { existing.Show(); existing.Activate(); return; }
+        var window = new RequestDetailWindow(entry, model.Log) { Owner = this };
+        detailWindows[entry.Id] = window;
+        window.Closed += (_, _) => detailWindows.Remove(entry.Id);
+        window.Show();
+    }
+    protected override void OnClosed(EventArgs e)
+    {
+        foreach (var window in detailWindows.Values.ToArray()) window.Close();
+        base.OnClosed(e);
     }
     private void IntegerTextInput(object sender, TextCompositionEventArgs e) =>
         e.Handled = e.Text.Any(c => !char.IsAsciiDigit(c));

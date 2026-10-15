@@ -52,7 +52,7 @@ public sealed class NotificationManager(EventStore store, IPopupPresenter presen
                 await ShowAsync(value, settings(), async () =>
                 {
                     await store.MarkShownAsync(value.EventId);
-                    log.Add("알림 표시 완료");
+                    log.SetPopupState(value.EventId, "표시 시작");
                     Shown?.Invoke(value.EventId);
                 }, token);
             }
@@ -71,6 +71,12 @@ public sealed class NotificationManager(EventStore store, IPopupPresenter presen
         using var popup = CancellationTokenSource.CreateLinkedTokenSource(token);
         lock (popupGate) activePopup = popup;
         try { await presenter.ShowAsync(value, valueSettings, onShown, popup.Token); }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception error)
+        {
+            log.SetPopupState(value.EventId, $"표시/저장 실패: {error.GetType().Name}: {error.Message}");
+            throw;
+        }
         finally
         {
             lock (popupGate)

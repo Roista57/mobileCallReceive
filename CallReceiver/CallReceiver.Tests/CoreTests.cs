@@ -216,7 +216,7 @@ public class CoreTests
         Assert.Equal(System.IO.Path.GetFullPath(target.Path), (await locations.ResolveAsync()).Directory);
         await Assert.ThrowsAsync<InvalidOperationException>(() => locations.ChangeAsync(exe.Path, target.Path));
     }
-    [Fact] public void LogsAreBoundedAndSingleLine()
+    [Fact] public async Task LogsAreBoundedAndSingleLine()
     {
         var log = new RequestLog();
         for (var i = 0; i < 220; i++) log.Add($"line\n{i}");
@@ -225,7 +225,7 @@ public class CoreTests
         Assert.Matches(@"^\d{4}\.\d{2}\.\d{2} \d{2}:\d{2}:\d{2}  line 219$", log.Snapshot()[0].ExportDisplay);
         var cleared = false;
         log.Cleared += () => cleared = true;
-        log.Clear();
+        await log.ClearAsync();
         Assert.True(cleared);
         Assert.Empty(log.Entries);
     }

@@ -33,7 +33,7 @@ class IncomingCallScreeningService : CallScreeningService() {
                 CallLog.event("CALL_RECEIVED", id)
                 CallLog.number(number)
                 CallLog.event("CALL_RECEIVED_AT", receivedAt)
-                app.calls.sendOnce(CallEvent(id, number, receivedAt))
+                app.calls.sendEvent(CallEvent(id, number, receivedAt))
             } catch (e: CancellationException) { throw e }
             catch (_: Exception) {
                 CallLog.event("HTTP_SEND_DISCARDED", id)

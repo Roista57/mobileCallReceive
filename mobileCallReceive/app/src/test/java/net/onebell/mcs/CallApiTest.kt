@@ -47,9 +47,9 @@ class CallApiTest {
         server.enqueue(MockResponse().setResponseCode(401))
         expectFailure(false) { CallApi().send(config, event) }
     }
-    @Test fun serverFailureIsRetryable() = runBlocking {
+    @Test fun serverFailureIsNotRetried() = runBlocking {
         server.enqueue(MockResponse().setResponseCode(503))
-        expectFailure(true) { CallApi().send(config, event) }
+        expectFailure(false) { CallApi().send(config, event) }
     }
     @Test fun wrongIdIsNotAcknowledged() = runBlocking {
         server.enqueue(MockResponse().setBody("""{"success":true,"eventId":"wrong"}"""))

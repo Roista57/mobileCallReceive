@@ -45,10 +45,13 @@ public class NotificationTests
         var store = new EventStore(Path.Combine(dir.Path, "events.db")); await store.InitializeAsync();
         var value = CallEvent.Test(); await store.AcceptAsync(value);
         var presenter = new Presenter { Failures = 1 };
-        await using var manager = new NotificationManager(store, presenter, () => new AppSettings(), new RequestLog());
+        var log = new RequestLog();
+        log.Add("POST /api/call 200", new RequestDiagnostic { EventId = value.EventId, PopupState = "미표시" });
+        await using var manager = new NotificationManager(store, presenter, () => new AppSettings(), log);
         manager.Start();
         await Task.Delay(300);
         Assert.Equal(1, await store.PendingCountAsync());
         Assert.Empty(presenter.Displayed);
+        Assert.Contains("실패", log.Snapshot().Single(l => l.Detail is not null).Detail!.PopupState);
     }
 }

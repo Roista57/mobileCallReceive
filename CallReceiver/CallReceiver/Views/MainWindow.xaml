@@ -99,7 +99,14 @@
       <Button x:Name="ClearLogButton" Content="로그 초기화" Command="{Binding ClearLogCommand}" Margin="0,0,6,0"/>
       <Button x:Name="ExportLogButton" Content="TXT로 저장" Command="{Binding ExportLogCommand}"/>
      </StackPanel>
-     <ListBox ItemsSource="{Binding Log.Entries}" DisplayMemberPath="Display"/>
+     <ListBox x:Name="RequestLogList" ItemsSource="{Binding Log.Entries}" HorizontalContentAlignment="Stretch">
+      <ListBox.ItemTemplate><DataTemplate>
+       <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+        <TextBlock Text="{Binding Display}" TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,8,0"/>
+        <Button Grid.Column="1" Content="자세히 보기" Click="ShowLogDetail" Padding="6,2"/>
+       </Grid>
+      </DataTemplate></ListBox.ItemTemplate>
+     </ListBox>
     </DockPanel>
    </TabItem>
   </TabControl>

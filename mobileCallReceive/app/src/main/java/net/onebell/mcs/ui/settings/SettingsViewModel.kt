@@ -105,7 +105,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 SettingsAction.HEALTH -> {
                     val started = android.os.SystemClock.elapsedRealtime()
                     try {
-                        val response = app.api.health(app.settings.current())
+                        if (!app.calls.checkHealth()) throw net.onebell.mcs.network.DeliveryFailure("PC 연결 실패: 로그의 상세 정보를 확인하세요.", false)
                         val elapsed = android.os.SystemClock.elapsedRealtime() - started
                         mutable.update { it.copy(health = "성공 · ${elapsed}ms") }
                         message("PC 연결 성공")
@@ -118,7 +118,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                     }
                 }
                 SettingsAction.TEST -> {
-                    val success = app.calls.sendOnce(CallEvent(phoneNumber = "01012345678", isTest = true))
+                    val success = app.calls.sendEvent(CallEvent(phoneNumber = "01012345678", isTest = true))
                     message(if (success) "테스트 이벤트 전송 성공" else "전송에 실패하여 테스트 이벤트를 폐기했습니다.")
                 }
             }

@@ -25,16 +25,18 @@ class QueueWorkerTest {
         server = MockWebServer()
         server.start()
         app.settings.save(AppConfig(serverIp = "127.0.0.1", serverPort = server.port.toString(), enabled = true))
+        app.settings.setEnabled(true)
     }
 
     @After fun cleanup() = runBlocking {
         server.shutdown()
         app.settings.save(saved)
+        app.settings.setEnabled(saved.enabled)
     }
 
     @Test fun failedDeliveryIsAttemptedOnceAndNotQueued() = runBlocking {
         server.enqueue(MockResponse().setResponseCode(503))
-        assertFalse(app.calls.sendOnce(CallEvent(phoneNumber = "01012345678")))
+        assertFalse(app.calls.sendEvent(CallEvent(phoneNumber = "01012345678")))
         assertEquals(1, server.requestCount)
         assertFalse(app.getDatabasePath("call-events.db").exists())
     }
@@ -42,7 +44,7 @@ class QueueWorkerTest {
     @Test fun successUsesNewContractWithoutAuthentication() = runBlocking {
         val event = CallEvent(phoneNumber = "01012345678", isTest = true)
         server.enqueue(MockResponse().setBody("{\"success\":true,\"eventId\":\"" + event.eventId + "\"}"))
-        assertTrue(app.calls.sendOnce(event))
+        assertTrue(app.calls.sendEvent(event))
         val request = server.takeRequest()
         assertNull(request.getHeader("X-Api-Key"))
         assertFalse(request.body.readUtf8().contains("deviceId"))

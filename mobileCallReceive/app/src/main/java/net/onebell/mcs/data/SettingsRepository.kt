@@ -7,21 +7,10 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import net.onebell.mcs.model.AppConfig
 import com.google.gson.Gson
-import com.google.gson.reflect.TypeToken
 
 private val Context.settingsStore by preferencesDataStore("settings")
 
 data class DeliveryStatus(val lastSent: String = "", val lastError: String = "", val lastWasTest: Boolean = false)
-data class DeliveryLog(
-    val receivedAt: String,
-    val phoneNumber: String,
-    val method: String,
-    val destination: String,
-    val success: Boolean,
-    val result: String,
-    val isTest: Boolean,
-)
-
 class SettingsRepository(context: Context) {
     private val store = context.settingsStore
     private val ip = stringPreferencesKey("serverIp")
@@ -36,17 +25,13 @@ class SettingsRepository(context: Context) {
     private val lastTest = booleanPreferencesKey("lastWasTest")
     private val deliveryLogs = stringPreferencesKey("deliveryLogs")
     private val gson = Gson()
-    private val logListType = object : TypeToken<List<DeliveryLog>>() {}.type
     val config = store.data.map { p ->
         val defaults = AppConfig()
         AppConfig(p[ip] ?: defaults.serverIp, p[port] ?: defaults.serverPort,
             p[path] ?: defaults.apiPath, p[enabled] ?: false)
     }
     val status = store.data.map { DeliveryStatus(it[lastSent] ?: "", it[lastError] ?: "", it[lastTest] ?: false) }
-    val logs = store.data.map { preferences ->
-        try { gson.fromJson<List<DeliveryLog>>(preferences[deliveryLogs] ?: "[]", logListType) ?: emptyList() }
-        catch (_: Exception) { emptyList() }
-    }
+    val logs = store.data.map { DeliveryLogCodec.decode(it[deliveryLogs] ?: "[]") }
     suspend fun current() = config.first()
     suspend fun save(value: AppConfig) {
         require(value.validationError() == null)
@@ -59,12 +44,10 @@ class SettingsRepository(context: Context) {
     suspend fun success(time: String, isTest: Boolean) {
         store.edit { it[lastSent] = time; it[lastError] = ""; it[lastTest] = isTest }
     }
-    suspend fun appendLog(log: DeliveryLog) {
+    suspend fun upsertLog(log: DeliveryLog) {
         store.edit { preferences ->
-            val current = try {
-                gson.fromJson<List<DeliveryLog>>(preferences[deliveryLogs] ?: "[]", logListType) ?: emptyList()
-            } catch (_: Exception) { emptyList() }
-            preferences[deliveryLogs] = gson.toJson((listOf(log) + current).take(200))
+            val current = DeliveryLogCodec.decode(preferences[deliveryLogs] ?: "[]")
+            preferences[deliveryLogs] = gson.toJson(DeliveryLogCodec.upsert(current, log))
         }
     }
     suspend fun migrateLegacySettings(): Boolean {

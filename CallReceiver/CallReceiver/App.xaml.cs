@@ -15,6 +15,7 @@ public partial class App : Application
     private TrayService? tray;
     private MainWindow? window;
     private DispatcherTimer? timer;
+    private RequestLog? requestLog;
     private bool exiting;
 
     protected override async void OnStartup(StartupEventArgs e)
@@ -51,7 +52,9 @@ public partial class App : Application
             if (loaded.FirstRun && loaded.Warning is null) await settings.SaveAsync(loaded.Settings);
             var store = new EventStore(Path.Combine(directory, "events.sqlite3"));
             await store.InitializeAsync();
-            var log = new RequestLog(Dispatcher);
+            var log = new RequestLog(Dispatcher, directory);
+            requestLog = log;
+            await log.InitializeAsync();
             server = new HttpServerService(store, log);
             MainViewModel? model = null;
             notifications = new NotificationManager(store, new WpfPopupPresenter(Dispatcher, log),
@@ -68,6 +71,7 @@ public partial class App : Application
             await model.StartInitialAsync();
             if (loaded.Warning is { } warning) model.SetMessage(warning);
             if (resolved.Warning is { } locationWarning) model.SetMessage(locationWarning);
+            if (log.PersistenceWarning is { } logWarning) model.SetMessage(logWarning);
             if (e.Args.Contains("--settings")) ShowSettings();
             timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
             timer.Tick += async (_, _) => await model.RefreshStatusAsync();
@@ -86,14 +90,18 @@ public partial class App : Application
         timer?.Stop();
         try
         {
-            if (server is not null) await server.StopAsync();
-            if (notifications is not null) await notifications.DisposeAsync();
+            try { if (server is not null) await server.StopAsync(); }
+            finally { if (notifications is not null) await notifications.DisposeAsync(); }
         }
         finally
         {
-            tray?.Dispose();
-            if (window is not null) { window.AllowClose = true; window.Close(); }
-            Shutdown();
+            try { if (requestLog is not null) await requestLog.DisposeAsync(); }
+            finally
+            {
+                tray?.Dispose();
+                if (window is not null) { window.AllowClose = true; window.Close(); }
+                Shutdown();
+            }
         }
     }
     protected override void OnExit(ExitEventArgs e)

@@ -10,7 +10,7 @@ import org.junit.Assume
 import org.junit.Test
 
 class PcIntegrationTest {
-    @Test fun emulatorToWindowsOneShotDelivery() = runBlocking {
+    @Test fun emulatorToWindowsOneShotDelivery(): Unit = runBlocking {
         Assume.assumeTrue(InstrumentationRegistry.getArguments().getString("pcIntegration") == "true")
         val app = ApplicationProvider.getApplicationContext<McsApplication>()
         InstrumentationRegistry.getInstrumentation().uiAutomation
@@ -18,7 +18,7 @@ class PcIntegrationTest {
         app.settings.save(AppConfig(serverIp = "10.0.2.2", enabled = true))
         assertEquals("ok", app.api.health(app.settings.current()).status)
         val event = CallEvent(phoneNumber = "01012345678", isTest = true)
-        assertEquals(true, app.calls.sendOnce(event))
+        assertEquals(true, app.calls.sendEvent(event))
         app.api.send(app.settings.current(), event)
     }
 }

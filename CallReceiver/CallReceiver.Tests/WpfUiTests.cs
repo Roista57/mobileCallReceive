@@ -50,6 +50,26 @@ public sealed class WpfUiTests
         while (!ready()) await Task.Delay(20, timeout.Token);
     }
 
+    [Fact] public Task RequestDetailWindowsAreNonModalAndKeepSnapshots() => OnSta(async () =>
+    {
+        var log = new RequestLog(Dispatcher.CurrentDispatcher);
+        var diagnostic = new RequestDiagnostic { EventId = Guid.NewGuid().ToString(), RequestBody = "{\"phoneNumber\":\"01012345678\"}",
+            RemoteAddress = "192.168.0.20:50000", LocalAddress = "192.168.0.50:18080" };
+        log.Add("POST /api/call 200 01012345678", diagnostic);
+        var owner = new Window(); owner.Show();
+        var detail = new RequestDetailWindow(log.Snapshot()[0], log) { Owner = owner };
+        detail.Show();
+        Assert.True(owner.IsEnabled);
+        Assert.Contains("192.168.0.20:50000 → 192.168.0.50:18080", detail.DetailText.Text);
+        Assert.Contains("01012345678", detail.DetailText.Text);
+        log.SetPopupState(diagnostic.EventId!, "표시 시작");
+        Assert.Contains("표시 시작", detail.DetailText.Text);
+        await log.ClearAsync();
+        Assert.Contains("01012345678", detail.DetailText.Text);
+        detail.Close(); owner.Close();
+        await Task.CompletedTask;
+    });
+
     [Fact] public Task HiddenLinesAndIndependentAlignment() => OnSta(() =>
     {
         foreach (var phoneSize in new[] { 0, 22 })
@@ -81,7 +101,8 @@ public sealed class WpfUiTests
     [InlineData(false)]
     public Task FullWpfHttpPathPopupFocusTimingAndHiddenWindow(bool isTest) => OnSta(async () =>
     {
-        await using var f = new HttpFixture();
+        var log = new RequestLog(Dispatcher.CurrentDispatcher);
+        await using var f = new HttpFixture(log);
         await f.StartAsync();
         var monitor = MonitorService.Primary();
         var initial = f.Settings with { Monitor = monitor.Id, PopupX = 20, PopupY = 20,
@@ -91,7 +112,6 @@ public sealed class WpfUiTests
         var locationService = new SettingsLocationService(f.Directory.Path, f.Directory.Path);
         await settingsService.SaveAsync(initial);
         var exportedLog = System.IO.Path.Combine(f.Directory.Path, "exported-log.txt");
-        var log = new RequestLog(Dispatcher.CurrentDispatcher);
         MainViewModel? model = null;
         await using var manager = new NotificationManager(f.Store,
             new WpfPopupPresenter(Dispatcher.CurrentDispatcher, log), () => model?.Saved ?? initial, log);

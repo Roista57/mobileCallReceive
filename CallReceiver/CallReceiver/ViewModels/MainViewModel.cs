@@ -73,6 +73,8 @@ public sealed class MainViewModel : INotifyPropertyChanged
         this.confirm = confirm ?? ((text, title) => System.Windows.MessageBox.Show(text, title,
             System.Windows.MessageBoxButton.YesNo, System.Windows.MessageBoxImage.Question) == System.Windows.MessageBoxResult.Yes);
         this.chooseLogFile = chooseLogFile ?? ChooseLogFile;
+        log.PersistenceFailed += SetMessage;
+        if (log.PersistenceWarning is { } warning) Message = warning;
         LoadDraft(initial);
         RefreshEnvironment();
         AsyncCommand Command(Func<Task> action)
@@ -107,12 +109,13 @@ public sealed class MainViewModel : INotifyPropertyChanged
             Message = "기본 설정 위치를 저장했습니다. 프로그램을 다시 시작하면 적용됩니다.";
         });
         ResetSettingsCommand = Command(ResetSettingsAsync);
-        ClearLogCommand = Command(() =>
+        ClearLogCommand = Command(async () =>
         {
-            if (!this.confirm("최근 요청 로그를 모두 지우시겠습니까?", "로그 초기화")) return Task.CompletedTask;
-            Log.Clear();
-            Message = "최근 요청 로그를 초기화했습니다.";
-            return Task.CompletedTask;
+            if (!this.confirm("현재 목록과 저장된 로그 파일을 모두 삭제하시겠습니까?", "로그 초기화")) return;
+            try { await Log.ClearAsync(); }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            { throw new InvalidOperationException("로그 파일 초기화에 실패했습니다. 일부 파일이 남아 있을 수 있습니다. " + e.Message, e); }
+            Message = "현재 목록과 저장된 로그 파일을 초기화했습니다.";
         });
         ExportLogCommand = Command(ExportLogAsync);
         notifications.Shown += id => dispatcher.BeginInvoke(() => PopupStatus = $"표시 성공 · {id}");

@@ -14,12 +14,13 @@ public sealed class HttpFixture : IAsyncDisposable
 {
     public readonly TestDirectory Directory = new();
     public readonly EventStore Store;
-    public readonly RequestLog Log = new();
+    public readonly RequestLog Log;
     public readonly HttpServerService Server;
     public readonly HttpClient Client = new();
     public readonly AppSettings Settings;
-    public HttpFixture()
+    public HttpFixture(RequestLog? log = null)
     {
+        Log = log ?? new RequestLog();
         var listener = new TcpListener(IPAddress.Loopback, 0);
         listener.Start();
         var port = ((IPEndPoint)listener.LocalEndpoint).Port;

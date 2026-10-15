@@ -57,6 +57,14 @@ public sealed class EventStore
         var json = await command.ExecuteScalarAsync() as string;
         return json is null ? null : JsonSerializer.Deserialize<CallEvent>(json, JsonDefaults.Options);
     }
+    public async Task<bool> IsShownAsync(string id)
+    {
+        await using var db = await OpenAsync();
+        using var command = db.CreateCommand();
+        command.CommandText = "SELECT shown_at IS NOT NULL FROM events WHERE event_id=$id";
+        command.Parameters.AddWithValue("$id", id);
+        return Convert.ToInt64(await command.ExecuteScalarAsync() ?? 0L) != 0;
+    }
     public async Task MarkShownAsync(string id)
     {
         await using var db = await OpenAsync();

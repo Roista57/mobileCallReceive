@@ -7,43 +7,30 @@ import kotlinx.coroutines.CancellationException
 import net.onebell.mcs.call.CallLog
 import net.onebell.mcs.model.CallEvent
 import net.onebell.mcs.network.CallApi
-import net.onebell.mcs.network.networkFailure
+import net.onebell.mcs.network.DeliveryRunner
+import net.onebell.mcs.network.networkSnapshot
 
 class CallRepository(
     private val context: Context,
     private val settings: SettingsRepository,
     private val api: CallApi,
 ) {
-    suspend fun sendOnce(event: CallEvent): Boolean {
+    private val runner = DeliveryRunner(api) { networkSnapshot(context) }
+    suspend fun sendEvent(event: CallEvent): Boolean {
         val config = settings.current()
         if (!event.isTest && !config.enabled) return false
-        val destination = "http://${config.serverIp}:${config.serverPort}${config.apiPath}"
-        return try {
-            CallLog.event("HTTP_SEND_START", event.eventId)
-            val sentAt = api.send(config, event)
-            settings.success(sentAt, event.isTest)
-            CallLog.event("HTTP_SEND_SUCCESS", event.eventId)
-            record(event, destination, true, "전송 성공")
-            true
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            val failure = networkFailure(e)
-            settings.error(failure.userMessage)
-            CallLog.event("HTTP_SEND_DISCARDED", "${event.eventId} ${failure.userMessage}")
-            record(event, destination, false, failure.userMessage)
-            false
-        }
-    }
-
-    private suspend fun record(event: CallEvent, destination: String, success: Boolean, result: String) {
+        CallLog.event("HTTP_SEND_START", event.eventId)
+        val result = runner.run(config, event, settings::upsertLog) { settings.current().enabled }
+        // Persistence errors must not turn a successful HTTP request into another attempt.
         try {
-            settings.appendLog(DeliveryLog(event.receivedAt, event.phoneNumber, "HTTP POST", destination,
-                success, result, event.isTest))
-        } catch (_: Exception) {
-            CallLog.event("DELIVERY_LOG_WRITE_FAILED", event.eventId)
-        }
+            if (result.success) settings.success(result.attempts.last().sentAt.orEmpty(), event.isTest)
+            else settings.error(result.result)
+        } catch (e: CancellationException) { throw e }
+        catch (_: Exception) { CallLog.event("STATUS_PERSIST_FAILED", event.eventId) }
+        CallLog.event(if (result.success) "HTTP_SEND_SUCCESS" else "HTTP_SEND_DISCARDED", event.eventId)
+        return result.success
     }
+    suspend fun checkHealth(): Boolean = runner.run(settings.current(), null, settings::upsertLog).success
 
     suspend fun start() = settings.setEnabled(true)
     suspend fun stop() = settings.setEnabled(false)
