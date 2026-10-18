@@ -24,7 +24,9 @@ public sealed class MainViewModel : INotifyPropertyChanged
     private readonly HttpServerService server;
     private readonly EventStore store;
     private readonly NotificationManager notifications;
-    private readonly StartupService startup;
+    private readonly IStartupService startup;
+    private readonly SemaphoreSlim operationGate = new(1, 1);
+    private bool shuttingDown;
     private readonly HttpSelfTest selfTest = new();
     private readonly Dispatcher dispatcher;
     private readonly Func<string> currentAddress;
@@ -38,13 +40,16 @@ public sealed class MainViewModel : INotifyPropertyChanged
     public RequestLog Log { get; }
     public IReadOnlyList<MonitorInfo> Monitors { get; private set; } = [];
     public bool IsBusy { get => busy; private set { busy = value; Raise(); Raise(nameof(IsEditable)); Raise(nameof(CanStartServer)); Raise(nameof(CanStopServer)); commands.ForEach(c => c.Refresh()); } }
-    public bool IsEditable => !IsBusy;
-    public bool CanStartServer => !IsBusy && !server.IsRunning;
-    public bool CanStopServer => !IsBusy && server.IsRunning;
+    public bool IsEditable => !IsBusy && !shuttingDown;
+    public bool CanStartServer => IsEditable && !server.IsRunning;
+    public bool CanStopServer => IsEditable && server.IsRunning;
     public string Message { get => message; private set { message = value; Raise(); } }
     public string PopupStatus { get => popupStatus; private set { popupStatus = value; Raise(); } }
     public string ServerStatus => server.IsRunning ? "실행 중" : "중지됨";
     public string SettingsDirectory => settingsService.DirectoryPath;
+    public string PendingSettingsDirectory => locationService.PendingDirectory is { } target
+        ? $"이전 예약: {target}\n정상 종료 시 최신 설정과 DB를 이전합니다." +
+            (locationService.HasDirectoryOverride ? $"\n다음 실행의 --data-dir도 \"{target}\"로 변경하세요." : " 다음 실행부터 적용합니다.") : "";
     public string Listening => server.RunningSettings is { } s
         ? $"{s.ListenAddress}:{s.ListenPort}"
         : "수신 중인 주소 없음";
@@ -63,7 +68,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
     public event Action? ServerChanged;
 
     public MainViewModel(AppSettings initial, SettingsService settingsService, SettingsLocationService locationService, HttpServerService server,
-        EventStore store, NotificationManager notifications, StartupService startup, RequestLog log, Dispatcher dispatcher,
+        EventStore store, NotificationManager notifications, IStartupService startup, RequestLog log, Dispatcher dispatcher,
         Func<string>? currentAddress = null, Func<string, string, bool>? confirm = null,
         Func<string?>? chooseLogFile = null)
     {
@@ -79,7 +84,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
         RefreshEnvironment();
         AsyncCommand Command(Func<Task> action)
         {
-            var command = new AsyncCommand(() => ExecuteAsync(action), () => !IsBusy);
+            var command = new AsyncCommand(() => ExecuteAsync(action), () => IsEditable);
             commands.Add(command); return command;
         }
         SaveCommand = Command(SaveAsync);
@@ -101,12 +106,16 @@ public sealed class MainViewModel : INotifyPropertyChanged
             { Description = "설정과 이벤트 DB를 저장할 빈 폴더를 선택하세요.", SelectedPath = SettingsDirectory };
             if (dialog.ShowDialog() != System.Windows.Forms.DialogResult.OK) return;
             await locationService.ChangeAsync(SettingsDirectory, dialog.SelectedPath);
-            Message = "설정 위치를 저장했습니다. 프로그램을 다시 시작하면 적용됩니다.";
+            Raise(nameof(PendingSettingsDirectory));
+            Message = locationService.PendingDirectory is null ? "이전 예약을 취소했습니다. 현재 설정 위치를 유지합니다."
+                : "설정 위치 변경을 예약했습니다. 정상 종료 시 최신 데이터를 이전합니다. 강제 종료하면 적용되지 않습니다.";
         });
         ResetSettingsDirectoryCommand = Command(async () =>
         {
             await locationService.ChangeAsync(SettingsDirectory, locationService.ExecutableDirectory);
-            Message = "기본 설정 위치를 저장했습니다. 프로그램을 다시 시작하면 적용됩니다.";
+            Raise(nameof(PendingSettingsDirectory));
+            Message = locationService.PendingDirectory is null ? "이전 예약을 취소했습니다. 현재 설정 위치를 유지합니다."
+                : "기본 설정 위치 변경을 예약했습니다. 정상 종료 시 적용합니다.";
         });
         ResetSettingsCommand = Command(ResetSettingsAsync);
         ClearLogCommand = Command(async () =>
@@ -122,6 +131,13 @@ public sealed class MainViewModel : INotifyPropertyChanged
     }
 
     public void SetMessage(string text) => Message = text;
+    public async Task PrepareShutdownAsync()
+    {
+        shuttingDown = true;
+        await operationGate.WaitAsync();
+        IsBusy = true;
+        // Held until process shutdown; no new settings command can race with migration.
+    }
     public Task RefreshStatusAsync()
     {
         Raise(nameof(ServerStatus)); Raise(nameof(Listening));
@@ -155,18 +171,18 @@ public sealed class MainViewModel : INotifyPropertyChanged
     }
     private async Task ExecuteAsync(Func<Task> action)
     {
-        if (IsBusy) return;
+        if (!IsEditable) return;
         IsBusy = true;
+        await operationGate.WaitAsync();
         try { await action(); }
-        catch (HttpRequestException e) { Message = e.StatusCode is System.Net.HttpStatusCode.Unauthorized or System.Net.HttpStatusCode.Forbidden
-            ? "인증 오류: API Key를 확인하세요." : $"HTTP 오류/연결 실패 ({e.StatusCode?.ToString() ?? "서버·포트 확인"})"; }
+        catch (HttpRequestException e) { Message = $"HTTP 오류/연결 실패 ({e.StatusCode?.ToString() ?? "서버·포트 확인"})"; }
         catch (OperationCanceledException) { Message = "Timeout: 요청 시간이 초과되었습니다."; }
         catch (Exception e)
         {
             Message = e is ArgumentException or InvalidOperationException or FormatException
                 ? e.Message : "작업 실패: 포트 충돌, 파일 접근 권한 또는 서버 상태를 확인하세요.";
         }
-        finally { IsBusy = false; Raise(nameof(ServerStatus)); Raise(nameof(Listening)); Raise(nameof(DirtyText)); Raise(nameof(CanStartServer)); Raise(nameof(CanStopServer)); ServerChanged?.Invoke(); }
+        finally { operationGate.Release(); IsBusy = false; Raise(nameof(ServerStatus)); Raise(nameof(Listening)); Raise(nameof(DirtyText)); Raise(nameof(CanStartServer)); Raise(nameof(CanStopServer)); ServerChanged?.Invoke(); }
     }
     private async Task ResetSettingsAsync()
     {
@@ -228,15 +244,17 @@ public sealed class MainViewModel : INotifyPropertyChanged
             Message = "설정을 저장했습니다. 알림 설정은 다음 팝업부터 적용됩니다.";
             Raise(nameof(DirtyText));
         }
-        catch
+        catch (Exception original)
         {
-            startup.Restore(oldStartup);
+            List<string> recovery = [];
+            try { startup.Restore(oldStartup); recovery.Add("자동 실행 복구 완료"); }
+            catch (Exception restoreError) { recovery.Add("자동 실행 복구 실패: " + restoreError.Message); }
             if (restart)
             {
-                try { await server.StopAsync(); await server.StartAsync(old); }
-                catch { Log.Add("이전 서버 설정 복구 실패. 현재 서버 상태를 확인하세요."); }
+                try { await server.StopAsync(); await server.StartAsync(old); recovery.Add("이전 서버 설정 복구 완료"); }
+                catch (Exception restoreError) { recovery.Add("이전 서버 설정 복구 실패: " + restoreError.Message); }
             }
-            throw;
+            throw new InvalidOperationException("설정 저장 실패: " + original.Message + "\n" + string.Join("\n", recovery), original);
         }
     }
     private string _ListenAddress = "127.0.0.1";

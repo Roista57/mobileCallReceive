@@ -50,6 +50,50 @@ public sealed class WpfUiTests
         while (!ready()) await Task.Delay(20, timeout.Token);
     }
 
+    private sealed class FailingStartup : IStartupService
+    {
+        public string? Read() => "old registration";
+        public void Apply(bool enabled) => throw new UnauthorizedAccessException("registration blocked");
+        public void Restore(string? value) => throw new UnauthorizedAccessException("restore blocked");
+    }
+
+    [Fact] public Task RegistryRestoreFailureStillRestoresServerAndShutdownWaitsForCommands() => OnSta(async () =>
+    {
+        await using var fixture = new HttpFixture(); await fixture.StartAsync();
+        await using var freePort = new HttpFixture();
+        var initial = fixture.Settings;
+        var settings = new SettingsService(fixture.Directory.Path); await settings.SaveAsync(initial);
+        await using var manager = new NotificationManager(fixture.Store, new WpfPopupPresenter(Dispatcher.CurrentDispatcher, fixture.Log),
+            () => initial, fixture.Log);
+        var model = new MainViewModel(initial, settings, new SettingsLocationService(fixture.Directory.Path),
+            fixture.Server, fixture.Store, manager, new FailingStartup(), fixture.Log, Dispatcher.CurrentDispatcher,
+            () => initial.ListenAddress);
+        model.ListenPort = freePort.Settings.ListenPort.ToString();
+        model.SaveCommand.Execute(null);
+        await WaitUntil(() => !model.IsBusy);
+        Assert.Contains("자동 실행 복구 실패", model.Message);
+        Assert.Contains("이전 서버 설정 복구 완료", model.Message);
+        Assert.Equal(initial, fixture.Server.RunningSettings);
+        Assert.Equal(initial, (await settings.LoadAsync(initial)).Settings);
+        Assert.Contains("정상", await new HttpSelfTest().HealthAsync(initial));
+        await model.PrepareShutdownAsync();
+        Assert.False(model.SaveCommand.CanExecute(null));
+        Assert.False(model.CanStartServer);
+        Assert.False(model.CanStopServer);
+    });
+
+    [Fact] public Task StorageRecoveryUsesDefaultControlsAndDoesNotDeleteData() => OnSta(() =>
+    {
+        using var directory = new TestDirectory();
+        var path = System.IO.Path.Combine(directory.Path, "events.sqlite3"); File.WriteAllText(path, "keep");
+        var window = new StorageRecoveryWindow("이벤트 DB 초기화 실패", directory.Path);
+        Assert.Contains("저장소 복구", window.Title);
+        Assert.Null(window.SelectedDirectory);
+        window.Close();
+        Assert.Equal("keep", File.ReadAllText(path));
+        return Task.CompletedTask;
+    });
+
     [Fact] public Task RequestDetailWindowsAreNonModalAndKeepSnapshots() => OnSta(async () =>
     {
         var log = new RequestLog(Dispatcher.CurrentDispatcher);

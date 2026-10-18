@@ -6,6 +6,12 @@ import androidx.test.platform.app.InstrumentationRegistry
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.flow.first
 import net.onebell.mcs.model.AppConfig
+import com.google.gson.JsonParser
+import okhttp3.mockwebserver.Dispatcher
+import okhttp3.mockwebserver.MockResponse
+import okhttp3.mockwebserver.MockWebServer
+import okhttp3.mockwebserver.RecordedRequest
+import java.util.concurrent.TimeUnit
 import org.junit.*
 import org.junit.Assert.*
 
@@ -64,12 +70,80 @@ class SettingsUiTest {
         }
         compose.onNode(hasText("서버 IP") and hasSetTextAction()).performScrollTo().performTextReplacement(testIp)
         compose.onNodeWithText("저장하지 않은 변경 사항이 있습니다.").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText("PC 연결 테스트").performScrollTo().performClick()
+        compose.onNodeWithText("PC 연결 테스트").assertDoesNotExist()
+        compose.onNodeWithText("테스트 전화 이벤트 전송").performScrollTo().performClick()
+        compose.onNodeWithText("변경한 설정을 먼저 저장하세요.").assertIsDisplayed()
         compose.onNodeWithText("저장", useUnmergedTree = true).performScrollTo().performClick()
         compose.waitForIdle()
         compose.activityRule.scenario.recreate()
         compose.onNode(hasText("서버 IP") and hasSetTextAction()).performScrollTo().assertTextContains(testIp)
         val app = compose.activity.application as McsApplication
         runBlocking { assertEquals(testIp, app.settings.current().serverIp) }
+    }
+
+    @Test fun invalidInputAndRepeatedActionsShowTransientFeedback() {
+        compose.waitUntil(10_000) { compose.onAllNodes(hasText("서버 IP") and hasSetTextAction()).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNode(hasText("서버 IP") and hasSetTextAction()).performScrollTo().performTextReplacement("invalid")
+        compose.onNodeWithText("저장", useUnmergedTree = true).performScrollTo().performClick()
+        compose.onNodeWithText("올바른 IPv4 주소를 입력하세요.").assertIsDisplayed()
+        compose.onNode(hasText("서버 IP") and hasSetTextAction()).performScrollTo().performTextReplacement(saved.serverIp)
+        compose.onNodeWithText("저장", useUnmergedTree = true).performScrollTo().performClick()
+        compose.waitUntil(10_000) { compose.onAllNodes(hasText("설정을 저장했습니다.")).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("설정을 저장했습니다.").assertIsDisplayed()
+    }
+
+    @Test fun testEventAlsoUpdatesConnectionStatusWithoutHealthRequest() {
+        val app = compose.activity.application as McsApplication
+        if (android.os.Build.VERSION.SDK_INT >= 37) {
+            val descriptor = InstrumentationRegistry.getInstrumentation().uiAutomation.executeShellCommand(
+                "pm grant net.onebell.mcs android.permission.ACCESS_LOCAL_NETWORK"
+            )
+            android.os.ParcelFileDescriptor.AutoCloseInputStream(descriptor).bufferedReader().use { it.readText() }
+        }
+        MockWebServer().use { server ->
+            server.dispatcher = object : Dispatcher() {
+                override fun dispatch(request: RecordedRequest): MockResponse {
+                    if (request.method != "POST" || request.path != "/custom/call")
+                        return MockResponse().setResponseCode(404)
+                    val json = JsonParser.parseString(request.body.clone().readUtf8()).asJsonObject
+                    return MockResponse().setBody("""{"success":true,"eventId":${json["eventId"]}}""")
+                }
+            }
+            server.start()
+            runBlocking {
+                app.settings.save(AppConfig(serverIp = "127.0.0.1", serverPort = server.port.toString(),
+                    apiPath = "/custom/call", enabled = false))
+            }
+            compose.waitUntil(10_000) {
+                compose.onAllNodes(hasText("/custom/call") and hasSetTextAction()).fetchSemanticsNodes().isNotEmpty()
+            }
+            compose.onNodeWithText("PC 연결 테스트").assertDoesNotExist()
+            compose.onNodeWithText("테스트 전화 이벤트 전송").performScrollTo().performClick()
+            compose.waitUntil(10_000) {
+                compose.onAllNodes(hasText("PC 연결: 성공 ·", substring = true)).fetchSemanticsNodes().isNotEmpty()
+            }
+            assertEquals(1, server.requestCount)
+            val request = server.takeRequest(1, TimeUnit.SECONDS)!!
+            assertEquals("POST", request.method)
+            assertEquals("/custom/call", request.path)
+            val json = JsonParser.parseString(request.body.readUtf8()).asJsonObject
+            assertTrue(json["isTest"].asBoolean)
+            assertFalse(runBlocking { app.settings.current().enabled })
+            val log = runBlocking { app.settings.logs.first().single { it.eventId == json["eventId"].asString } }
+            assertTrue(log.success)
+            assertEquals("CALL", log.kind)
+            assertEquals(1, log.attempts.size)
+
+            server.dispatcher = object : Dispatcher() {
+                override fun dispatch(request: RecordedRequest) = MockResponse().setResponseCode(503)
+            }
+            compose.waitForIdle()
+            compose.onNodeWithText("테스트 전화 이벤트 전송").performScrollTo().performClick()
+            compose.waitUntil(10_000) {
+                compose.onAllNodes(hasText("PC 연결: 실패")).fetchSemanticsNodes().isNotEmpty()
+            }
+            assertEquals(2, server.requestCount)
+            assertEquals("POST", server.takeRequest(1, TimeUnit.SECONDS)!!.method)
+        }
     }
 }

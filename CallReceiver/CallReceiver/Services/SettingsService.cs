@@ -15,6 +15,7 @@ public sealed class SettingsService(string directory)
         if (!File.Exists(SettingsPath) && !File.Exists(SettingsPath + ".bak")) return new(defaults, true, null);
         foreach (var path in new[] { SettingsPath, SettingsPath + ".bak" })
         {
+            if (!File.Exists(path)) continue;
             try
             {
                 var json = System.Text.Json.Nodes.JsonNode.Parse(await File.ReadAllTextAsync(path));
@@ -34,7 +35,7 @@ public sealed class SettingsService(string directory)
                 if (settings is not null && settings.Validate() is null)
                     return new(settings, false, path.EndsWith(".bak") ? "설정 파일 오류로 이전 정상 백업을 불러왔습니다." : null);
             }
-            catch (Exception e) when (e is IOException or JsonException or UnauthorizedAccessException) { }
+            catch (JsonException) { }
         }
         return new(defaults, true, "설정과 백업을 읽을 수 없어 기본값을 사용합니다. 저장 전에 설정을 확인하세요.");
     }

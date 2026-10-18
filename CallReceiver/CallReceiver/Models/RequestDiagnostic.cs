@@ -33,6 +33,29 @@ public sealed record RequestDiagnostic
     public CallEvent? Event { get; init; }
     public IReadOnlyList<RequestStage> Stages { get; init; } = [];
 
+    internal RequestDiagnostic Normalize(out bool repaired)
+    {
+        var stages = (Stages ?? []).Where(s => s is not null && s.Name is not null &&
+            double.IsFinite(s.ElapsedMs) && s.ElapsedMs >= 0).Take(100).ToArray();
+        var call = Event;
+        if (call is not null)
+        {
+            try { call = CallEvent.Parse(JsonSerializer.SerializeToElement(call, JsonDefaults.Options)); }
+            catch (Exception e) when (e is FormatException or InvalidOperationException or JsonException) { call = null; }
+        }
+        repaired = Stages is null || stages.Length != Stages.Count || Method is null || Path is null ||
+            RequestId is null || Validation is null || Storage is null || ResponseState is null || PopupState is null ||
+            !double.IsFinite(ElapsedMs) || ElapsedMs < 0 || CapturedBytes < 0 || call != Event;
+        return this with
+        {
+            Stages = stages, Event = call, Method = Method ?? "", Path = Path ?? "",
+            RequestId = RequestId ?? "기록 없음", Validation = Validation ?? "미검증", Storage = Storage ?? "해당 없음",
+            ResponseState = ResponseState ?? "기록 없음", PopupState = PopupState ?? "해당 없음",
+            ElapsedMs = double.IsFinite(ElapsedMs) && ElapsedMs >= 0 ? ElapsedMs : 0,
+            CapturedBytes = Math.Max(0, CapturedBytes)
+        };
+    }
+
     public static string Time(DateTimeOffset? time) => time is null ? "기록 없음" :
         TimeZoneInfo.ConvertTime(time.Value, TimeZoneInfo.FindSystemTimeZoneById("Korea Standard Time"))
             .ToString("yyyy.MM.dd HH:mm:ss.fff", CultureInfo.InvariantCulture);
@@ -52,7 +75,7 @@ public sealed record RequestDiagnostic
         if (Event is { } call) text.AppendLine($"\n전화번호: {call.PhoneNumber}\n수신시간: {Time(call.ReceivedAt)}\nsentAt: {call.SentAt:O}\nisTest: {call.IsTest}\nschemaVersion: {call.SchemaVersion}");
         text.AppendLine($"\n검증: {Validation}\n저장: {Storage}\nHTTP: {HttpStatus?.ToString() ?? "응답 미완료"}\n응답: {ResponseState}\n팝업: {PopupState}");
         text.AppendLine("서버의 응답 쓰기 완료는 모바일 수신 확인이 아닙니다.");
-        text.AppendLine("\n처리 흐름: " + string.Join(" → ", Stages.Select(s => $"{s.Name} (+{s.ElapsedMs:F1}ms)")));
+        text.AppendLine("\n처리 흐름: " + string.Join(" → ", (Stages ?? []).Where(s => s is not null).Select(s => $"{s.Name} (+{s.ElapsedMs:F1}ms)")));
         if (Error is not null) text.AppendLine($"\n오류: {Error}");
         text.AppendLine($"\n요청 본문\n{Json(RequestBody)}");
         if (Truncated) text.AppendLine("요청 기록은 최대 16KB로 잘렸습니다.");

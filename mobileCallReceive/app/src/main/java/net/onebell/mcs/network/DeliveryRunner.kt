@@ -13,6 +13,7 @@ import java.util.UUID
 
 class DeliveryRunner(private val api: CallApi, private val snapshot: () -> NetworkSnapshot = { NetworkSnapshot() }) {
     suspend fun run(config: AppConfig, event: CallEvent?, record: suspend (DeliveryLog) -> Unit,
+        onRecordFailure: (Throwable) -> Unit = {},
         enabled: suspend () -> Boolean = { true }): DeliveryLog {
         val health = event == null
         var log = DeliveryLog(receivedAt = event?.receivedAt.orEmpty(), phoneNumber = event?.phoneNumber.orEmpty(),
@@ -21,8 +22,14 @@ class DeliveryRunner(private val api: CallApi, private val snapshot: () -> Netwo
             isTest = event?.isTest ?: false, logId = UUID.randomUUID().toString(), schemaVersion = 2,
             eventId = event?.eventId, kind = if (health) "HEALTH" else "CALL", state = "SENDING",
             startedAt = OffsetDateTime.now().toString(), sessionId = DiagnosticSession.id)
+        var recordingFailureReported = false
         suspend fun save() {
-            try { record(log) } catch (e: CancellationException) { throw e } catch (_: Exception) { /* Never retry HTTP due to a log write failure. */ }
+            try { record(log) } catch (e: CancellationException) { throw e } catch (error: Exception) {
+                if (!recordingFailureReported) {
+                    recordingFailureReported = true
+                    runCatching { onRecordFailure(error) }
+                }
+            }
         }
         try {
             save()

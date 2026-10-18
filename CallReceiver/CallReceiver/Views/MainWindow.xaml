@@ -85,7 +85,8 @@
       <StackPanel Margin="8">
        <TextBox Text="{Binding SettingsDirectory, Mode=OneWay}" IsReadOnly="True"/>
        <WrapPanel Margin="0,6,0,0"><Button Content="설정 폴더 선택" Command="{Binding ChooseSettingsDirectoryCommand}" Margin="0,0,6,0"/><Button Content="실행 파일 위치로 되돌리기" Command="{Binding ResetSettingsDirectoryCommand}"/></WrapPanel>
-       <TextBlock Margin="0,6,0,0" Text="위치 변경은 프로그램을 다시 시작한 뒤 적용됩니다."/>
+       <TextBlock Margin="0,6,0,0" Text="위치 변경은 정상 종료 시 최신 데이터를 이전한 뒤 다음 실행부터 적용됩니다." TextWrapping="Wrap"/>
+       <TextBlock Margin="0,6,0,0" Text="{Binding PendingSettingsDirectory}" TextWrapping="Wrap"/>
       </StackPanel>
      </GroupBox>
      <CheckBox Content="Windows 로그인 시 자동 실행" IsChecked="{Binding StartWithWindows}" Margin="4,10,4,4"/>

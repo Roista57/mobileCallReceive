@@ -12,27 +12,56 @@ internal sealed record StoredLog(int Version, string Kind, DateTimeOffset At,
 // All file mutations, including clear and shutdown flush, run on one reader.
 internal sealed class LogFileStore : IAsyncDisposable
 {
+    internal const int DefaultCapacity = 256;
     private sealed record Work(StoredLog? Record, bool Clear, TaskCompletionSource? Done);
     private readonly Channel<Work> queue = Channel.CreateUnbounded<Work>(new UnboundedChannelOptions
         { SingleReader = true, AllowSynchronousContinuations = false });
     private readonly Action<string> warning;
     private readonly Func<DateTimeOffset> now;
     private readonly Task worker;
+    private readonly SemaphoreSlim recordSlots;
+    private readonly Func<StoredLog, Task> writeRecord;
+    private int pendingRecords, maxPendingRecords, overflowNotified;
+    private long droppedRecords, reportedDrops;
+    public int PendingRecords => Volatile.Read(ref pendingRecords);
+    public int MaxPendingRecords => Volatile.Read(ref maxPendingRecords);
+    public long DroppedRecords => Interlocked.Read(ref droppedRecords);
     private StreamWriter? writer;
     private string? openPath;
     private static readonly JsonSerializerOptions Json = new(JsonDefaults.Options) { WriteIndented = false };
     public string DirectoryPath { get; }
     public Task<IReadOnlyList<LogEntry>> Restored { get; }
 
-    public LogFileStore(string directory, Action<string> warning, Func<DateTimeOffset> now)
+    public LogFileStore(string directory, Action<string> warning, Func<DateTimeOffset> now,
+        int capacity = DefaultCapacity, Func<StoredLog, Task>? writeRecord = null)
     {
+        ArgumentOutOfRangeException.ThrowIfLessThan(capacity, 1);
         DirectoryPath = Path.Combine(Path.GetFullPath(directory), "logs");
         this.warning = warning; this.now = now;
+        recordSlots = new SemaphoreSlim(capacity, capacity);
+        this.writeRecord = writeRecord ?? WriteAsync;
         Restored = Task.Run(ReadRecent);
         worker = Task.Run(WriteLoopAsync);
     }
-    public void Append(LogEntry entry) => queue.Writer.TryWrite(new(new(1, "entry", now(), entry), false, null));
-    public void Popup(string eventId, string state) => queue.Writer.TryWrite(new(new(1, "popup", now(), EventId: eventId, PopupState: state), false, null));
+    public void Append(LogEntry entry) => EnqueueRecord(new(1, "entry", now(), entry));
+    public void Popup(string eventId, string state) => EnqueueRecord(new(1, "popup", now(), EventId: eventId, PopupState: state));
+    private void EnqueueRecord(StoredLog record)
+    {
+        // Bound payloads, including the in-flight write. Control barriers remain ordered and never drop.
+        if (!recordSlots.Wait(0))
+        {
+            Interlocked.Increment(ref droppedRecords);
+            if (Interlocked.Exchange(ref overflowNotified, 1) == 0)
+                warning("로그 저장 대기열이 가득 찼습니다. 초과한 기록은 파일에 저장되지 않으며 메모리 최근 목록과 HTTP 처리는 유지됩니다.");
+            return;
+        }
+        var pending = Interlocked.Increment(ref pendingRecords);
+        int previous;
+        do { previous = maxPendingRecords; if (pending <= previous) break; }
+        while (Interlocked.CompareExchange(ref maxPendingRecords, pending, previous) != previous);
+        if (!queue.Writer.TryWrite(new(record, false, null))) ReleaseRecord();
+    }
+    private void ReleaseRecord() { Interlocked.Decrement(ref pendingRecords); recordSlots.Release(); }
     public Task ClearAsync() => Barrier(true);
     public Task FlushAsync() => Barrier(false);
     private Task Barrier(bool clear)
@@ -107,6 +136,12 @@ internal sealed class LogFileStore : IAsyncDisposable
                         (record.Kind == "entry" && (record.Entry is null || string.IsNullOrEmpty(record.Entry.Id) || record.Entry.Message is null)) ||
                         (record.Kind == "popup" && (record.EventId is null || record.PopupState is null)))
                         throw new JsonException("지원하지 않거나 불완전한 로그 기록");
+                    if (record.Entry?.Detail is { } detail)
+                    {
+                        var normalized = detail.Normalize(out var repaired);
+                        if (repaired) warning("손상된 로그의 일부 상세 항목을 안전한 기본값으로 보정했습니다.");
+                        record = record with { Entry = record.Entry with { Detail = normalized } };
+                    }
                 }
                 catch (JsonException) { warning("일부 손상되거나 불완전한 로그 기록을 건너뛰었습니다."); continue; }
                 yield return record;
@@ -180,8 +215,18 @@ internal sealed class LogFileStore : IAsyncDisposable
                         try { File.Delete(file); } catch (Exception e) when (e is IOException or UnauthorizedAccessException) { errors.Add(e); }
                     if (errors.Count > 0) throw new IOException("일부 로그 파일을 삭제하지 못했습니다. 파일 잠금과 접근 권한을 확인하세요.", errors[0]);
                 }
-                else if (item.Record is { } record) await WriteAsync(record);
+                else if (item.Record is { } record) await writeRecord(record);
                 else if (writer is not null) await writer.FlushAsync();
+                if (item.Done is not null)
+                {
+                    var dropped = DroppedRecords;
+                    if (dropped != reportedDrops)
+                    {
+                        reportedDrops = dropped;
+                        warning($"로그 대기열 초과로 파일에 저장하지 못한 기록: 누적 {dropped}건. HTTP 접수 결과와는 별개입니다.");
+                    }
+                    Interlocked.Exchange(ref overflowNotified, 0);
+                }
                 item.Done?.TrySetResult();
             }
             catch (Exception e) when (e is IOException or UnauthorizedAccessException)
@@ -190,6 +235,7 @@ internal sealed class LogFileStore : IAsyncDisposable
                 try { await CloseWriterAsync(); } catch (Exception closeError) when (closeError is IOException or UnauthorizedAccessException) { }
                 item.Done?.TrySetException(e);
             }
+            finally { if (item.Record is not null) ReleaseRecord(); }
         }
         try { await CloseWriterAsync(); }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException) { warning("로그 파일 종료 저장 실패: " + e.Message); }
@@ -198,5 +244,6 @@ internal sealed class LogFileStore : IAsyncDisposable
     {
         queue.Writer.TryComplete();
         await worker;
+        recordSlots.Dispose();
     }
 }

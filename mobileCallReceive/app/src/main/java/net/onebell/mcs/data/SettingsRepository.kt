@@ -1,18 +1,33 @@
 package net.onebell.mcs.data
 
 import android.content.Context
+import androidx.datastore.core.DataStore
+import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
 import androidx.datastore.preferences.core.*
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.retryWhen
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
 import net.onebell.mcs.model.AppConfig
 import com.google.gson.Gson
 
-private val Context.settingsStore by preferencesDataStore("settings")
+internal val recoveredSettings = booleanPreferencesKey("corruptionRecovered")
+internal fun settingsCorruptionHandler() = ReplaceFileCorruptionHandler<Preferences> {
+    mutablePreferencesOf(recoveredSettings to true)
+}
+private val Context.settingsStore by preferencesDataStore("settings", corruptionHandler = settingsCorruptionHandler())
 
 data class DeliveryStatus(val lastSent: String = "", val lastError: String = "", val lastWasTest: Boolean = false)
-class SettingsRepository(context: Context) {
-    private val store = context.settingsStore
+data class SettingsSnapshot(val config: AppConfig, val status: DeliveryStatus, val logs: List<DeliveryLog>, val recovered: Boolean)
+data class StorageNotice(val id: Long, val text: String)
+class SettingsRepository(private val store: DataStore<Preferences>) {
+    constructor(context: Context) : this(context.settingsStore)
+    private val noticeCounter = java.util.concurrent.atomic.AtomicLong()
+    private val mutableNotice = kotlinx.coroutines.flow.MutableStateFlow<StorageNotice?>(null)
+    val notices = mutableNotice.asStateFlow()
     private val ip = stringPreferencesKey("serverIp")
     private val port = stringPreferencesKey("serverPort")
     private val path = stringPreferencesKey("apiPath")
@@ -32,6 +47,25 @@ class SettingsRepository(context: Context) {
     }
     val status = store.data.map { DeliveryStatus(it[lastSent] ?: "", it[lastError] ?: "", it[lastTest] ?: false) }
     val logs = store.data.map { DeliveryLogCodec.decode(it[deliveryLogs] ?: "[]") }
+    val snapshots = store.data.map { p ->
+        val defaults = AppConfig()
+        SettingsSnapshot(AppConfig(p[ip] ?: defaults.serverIp, p[port] ?: defaults.serverPort,
+            p[path] ?: defaults.apiPath, p[enabled] ?: false),
+            DeliveryStatus(p[lastSent] ?: "", p[lastError] ?: "", p[lastTest] ?: false),
+            DeliveryLogCodec.decode(p[deliveryLogs] ?: "[]"), p[recoveredSettings] == true)
+    }
+    fun observeSnapshots(onReadFailure: (Throwable) -> Unit) = snapshots.retryWhen { error, _ ->
+        if (error is CancellationException) throw error
+        onReadFailure(error)
+        delay(1500)
+        true
+    }
+    fun reportRecordingFailure() {
+        // Keep warnings independent of the failing DataStore.
+        mutableNotice.value = StorageNotice(noticeCounter.incrementAndGet(),
+            "전송 결과와 별개로 로그 또는 상태를 저장하지 못했습니다. 저장 공간과 앱 저장소를 확인하세요.")
+    }
+    suspend fun acknowledgeRecovery() { store.edit { it.remove(recoveredSettings) } }
     suspend fun current() = config.first()
     suspend fun save(value: AppConfig) {
         require(value.validationError() == null)

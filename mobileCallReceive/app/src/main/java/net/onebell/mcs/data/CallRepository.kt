@@ -20,18 +20,17 @@ class CallRepository(
         val config = settings.current()
         if (!event.isTest && !config.enabled) return false
         CallLog.event("HTTP_SEND_START", event.eventId)
-        val result = runner.run(config, event, settings::upsertLog) { settings.current().enabled }
+        val result = runner.run(config, event, settings::upsertLog,
+            onRecordFailure = { settings.reportRecordingFailure() }) { settings.current().enabled }
         // Persistence errors must not turn a successful HTTP request into another attempt.
         try {
             if (result.success) settings.success(result.attempts.last().sentAt.orEmpty(), event.isTest)
             else settings.error(result.result)
         } catch (e: CancellationException) { throw e }
-        catch (_: Exception) { CallLog.event("STATUS_PERSIST_FAILED", event.eventId) }
+        catch (_: Exception) { CallLog.event("STATUS_PERSIST_FAILED", event.eventId); settings.reportRecordingFailure() }
         CallLog.event(if (result.success) "HTTP_SEND_SUCCESS" else "HTTP_SEND_DISCARDED", event.eventId)
         return result.success
     }
-    suspend fun checkHealth(): Boolean = runner.run(settings.current(), null, settings::upsertLog).success
-
     suspend fun start() = settings.setEnabled(true)
     suspend fun stop() = settings.setEnabled(false)
 

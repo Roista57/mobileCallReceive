@@ -21,11 +21,12 @@ public sealed class RequestLog : IAsyncDisposable
     private readonly List<LogEntry> recent = [];
     private readonly Dictionary<string, string> popupStates = new(StringComparer.OrdinalIgnoreCase);
     private readonly Queue<string> popupOrder = new();
-    private long version, displayedVersion;
+    private bool publishScheduled, clearPending;
     private bool disposed;
     public ObservableCollection<LogEntry> Entries { get; } = [];
     public string? PersistenceWarning { get; private set; }
     public string? LogDirectory => files?.DirectoryPath;
+    public long DroppedFileRecords => files?.DroppedRecords ?? 0;
     public event Action<string>? PersistenceFailed;
     public event Action<LogEntry>? Added;
     public event Action? Cleared;
@@ -36,31 +37,43 @@ public sealed class RequestLog : IAsyncDisposable
         this.dispatcher = dispatcher; this.now = now ?? (() => DateTimeOffset.Now);
         if (directory is not null) files = new LogFileStore(directory, ReportWarning, this.now);
     }
+    internal RequestLog(LogFileStore files) : this() { this.files = files; }
     private void ReportWarning(string text)
     {
+        if (PersistenceWarning == text) return;
         PersistenceWarning = text;
         // Errors must never be logged back to the file writer recursively.
         if (dispatcher is not null && !dispatcher.CheckAccess()) dispatcher.BeginInvoke(() => PersistenceFailed?.Invoke(text));
         else PersistenceFailed?.Invoke(text);
     }
-    // Call while holding gate. Sequence versions prevent a delayed UI callback from restoring an older list.
+    // At most one dispatcher callback retains a notification, rather than a snapshot per request.
     private void Publish(bool clear = false)
     {
-        var snapshot = recent.ToArray();
-        var revision = ++version;
+        clearPending |= clear;
         void Apply()
         {
-            if (revision <= displayedVersion) return;
-            displayedVersion = revision;
+            LogEntry[] snapshot;
+            bool cleared;
+            lock (gate)
+            {
+                publishScheduled = false;
+                snapshot = recent.ToArray();
+                cleared = clearPending; clearPending = false;
+            }
             var previous = Entries.ToDictionary(e => e.Id);
             Entries.Clear();
             foreach (var entry in snapshot) Entries.Add(entry);
-            if (clear) Cleared?.Invoke();
+            if (cleared) Cleared?.Invoke();
             foreach (var entry in snapshot)
                 if (!previous.TryGetValue(entry.Id, out var old)) Added?.Invoke(entry);
                 else if (old != entry) Updated?.Invoke(entry);
         }
-        if (dispatcher is not null && !dispatcher.CheckAccess()) dispatcher.BeginInvoke(Apply);
+        if (dispatcher is not null && !dispatcher.CheckAccess())
+        {
+            if (publishScheduled) return;
+            publishScheduled = true;
+            dispatcher.BeginInvoke(Apply);
+        }
         else Apply();
     }
     public async Task InitializeAsync()

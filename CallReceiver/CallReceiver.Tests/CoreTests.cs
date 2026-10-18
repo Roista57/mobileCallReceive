@@ -212,6 +212,11 @@ public class CoreTests
         var locations = new SettingsLocationService(exe.Path);
         Assert.Equal(System.IO.Path.GetFullPath(exe.Path), (await locations.ResolveAsync()).Directory);
         await locations.ChangeAsync(exe.Path, target.Path);
+        Assert.False(File.Exists(System.IO.Path.Combine(target.Path, "settings.json")));
+        Assert.Equal(System.IO.Path.GetFullPath(exe.Path), (await locations.ResolveAsync()).Directory);
+        var store = new EventStore(System.IO.Path.Combine(exe.Path, "events.sqlite3"));
+        await store.InitializeAsync();
+        await locations.CompletePendingAsync(new AppSettings(), store);
         Assert.True(File.Exists(System.IO.Path.Combine(target.Path, "settings.json")));
         Assert.Equal(System.IO.Path.GetFullPath(target.Path), (await locations.ResolveAsync()).Directory);
         await Assert.ThrowsAsync<InvalidOperationException>(() => locations.ChangeAsync(exe.Path, target.Path));

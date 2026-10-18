@@ -45,7 +45,6 @@ fun SettingsScreen(state: SettingsState, viewModel: SettingsViewModel,
             Button({ onAction(SettingsAction.START) }, enabled = usable, modifier = Modifier.weight(1f)) { Text("시작") }
             OutlinedButton(viewModel::stop, enabled = usable, modifier = Modifier.weight(1f)) { Text("중지") }
         }
-        OutlinedButton({ onAction(SettingsAction.HEALTH) }, enabled = usable, modifier = Modifier.fillMaxWidth()) { Text("PC 연결 테스트") }
         OutlinedButton({ onAction(SettingsAction.TEST) }, enabled = usable, modifier = Modifier.fillMaxWidth()) { Text("테스트 전화 이벤트 전송") }
         if (state.busy) LinearProgressIndicator(Modifier.fillMaxWidth())
         TextButton(onPermissions) { Text("앱 권한 설정 열기") }

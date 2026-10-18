@@ -16,6 +16,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.LaunchedEffect
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
+import kotlinx.coroutines.flow.collectLatest
 import androidx.compose.material3.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.ui.Modifier
@@ -40,8 +45,14 @@ class MainActivity : ComponentActivity() {
         setContent {
             val state by viewModel.state.collectAsStateWithLifecycle()
             var selectedTab by rememberSaveable { mutableIntStateOf(0) }
+            val snackbar = remember { SnackbarHostState() }
+            LaunchedEffect(viewModel) {
+                lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                    viewModel.messages.collectLatest { snackbar.showSnackbar(it, duration = SnackbarDuration.Short) }
+                }
+            }
             MCSTheme {
-                Scaffold { padding ->
+                Scaffold(snackbarHost = { SnackbarHost(snackbar) }) { padding ->
                     Column(Modifier.padding(padding)) {
                         PrimaryTabRow(selectedTabIndex = selectedTab) {
                             Tab(selected = selectedTab == 0, onClick = { selectedTab = 0 },

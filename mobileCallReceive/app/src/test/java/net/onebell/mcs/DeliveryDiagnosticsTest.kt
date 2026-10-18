@@ -93,7 +93,10 @@ class DeliveryDiagnosticsTest {
     }
     @Test fun logWriteFailureDoesNotResendAcceptedEvent() = runBlocking {
         server.enqueue(ok())
-        assertTrue(DeliveryRunner(api(1000)).run(config, event, { throw java.io.IOException("disk") }).success)
+        var warnings = 0
+        assertTrue(DeliveryRunner(api(1000)).run(config, event, { throw java.io.IOException("disk") },
+            onRecordFailure = { warnings++ }).success)
+        assertEquals(1, warnings)
         assertEquals(1, server.requestCount)
     }
     @Test fun cancellationAfterAcknowledgementPreservesKnownSuccess() = runBlocking {

@@ -89,4 +89,25 @@ public sealed class EventStore
         command.Parameters.AddWithValue("$cutoff", DateTimeOffset.UtcNow.AddDays(-30).ToUnixTimeMilliseconds());
         await command.ExecuteNonQueryAsync();
     }
+
+    public async Task BackupToAsync(string target)
+    {
+        await gate.WaitAsync();
+        try
+        {
+            await Task.Run(async () =>
+            {
+                await using var source = await OpenAsync();
+                await using var destination = new SqliteConnection(new SqliteConnectionStringBuilder
+                    { DataSource = target, Pooling = false }.ToString());
+                await destination.OpenAsync();
+                source.BackupDatabase(destination);
+                using var check = destination.CreateCommand();
+                check.CommandText = "PRAGMA quick_check";
+                if (!string.Equals(await check.ExecuteScalarAsync() as string, "ok", StringComparison.Ordinal))
+                    throw new IOException("이전할 이벤트 DB의 무결성 확인에 실패했습니다.");
+            });
+        }
+        finally { gate.Release(); }
+    }
 }

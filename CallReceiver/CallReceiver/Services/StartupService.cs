@@ -2,7 +2,13 @@ using Microsoft.Win32;
 
 namespace CallReceiver.Services;
 
-public sealed class StartupService
+public interface IStartupService
+{
+    string? Read();
+    void Restore(string? value);
+    void Apply(bool enabled);
+}
+public sealed class StartupService : IStartupService
 {
     public const string RunPath = @"Software\Microsoft\Windows\CurrentVersion\Run";
     private readonly string valueName;

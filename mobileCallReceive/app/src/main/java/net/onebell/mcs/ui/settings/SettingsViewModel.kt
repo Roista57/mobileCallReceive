@@ -7,14 +7,15 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import net.onebell.mcs.McsApplication
 import net.onebell.mcs.call.CallAccess
-import net.onebell.mcs.call.CallLog
 import net.onebell.mcs.data.DeliveryStatus
 import net.onebell.mcs.data.DeliveryLog
 import net.onebell.mcs.model.AppConfig
 import net.onebell.mcs.model.CallEvent
 import net.onebell.mcs.network.networkFailure
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.channels.Channel
 
-enum class SettingsAction { START, HEALTH, TEST }
+enum class SettingsAction { START, TEST }
 
 data class SettingsState(
     val saved: AppConfig = AppConfig(),
@@ -26,6 +27,7 @@ data class SettingsState(
     val localNetwork: Boolean = false,
     val status: DeliveryStatus = DeliveryStatus(),
     val message: String = "",
+    val storageWarning: String = "",
     val health: String = "미확인",
     val logs: List<DeliveryLog> = emptyList(),
 ) {
@@ -36,18 +38,37 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     private val app = application as McsApplication
     private val mutable = MutableStateFlow(SettingsState())
     val state = mutable.asStateFlow()
+    private val messageChannel = Channel<String>(32, BufferOverflow.DROP_OLDEST)
+    val messages = messageChannel.receiveAsFlow()
     var pendingAction: SettingsAction? = null
 
     init {
         viewModelScope.launch {
-            app.settings.config.catch { message("설정을 읽을 수 없습니다.") }.collect { config ->
+            var readFailed = false
+            var recoveryAnnounced = false
+            app.settings.observeSnapshots {
+                mutable.update { it.copy(loaded = false) }
+                if (!readFailed) message("설정과 로그를 읽을 수 없습니다. 기존 데이터를 유지하고 자동으로 다시 시도합니다.")
+                readFailed = true
+            }.collect { snapshot ->
+                val config = snapshot.config
                 mutable.update { old -> old.copy(saved = config,
-                    draft = if (!old.loaded || !old.dirty) config else old.draft.copy(enabled = config.enabled),
-                    loaded = true) }
+                    draft = if (!old.dirty) config else old.draft.copy(enabled = config.enabled),
+                    loaded = true, status = snapshot.status, logs = snapshot.logs) }
+                if (readFailed) { message("설정과 로그를 다시 읽었습니다."); readFailed = false }
+                if (snapshot.recovered && !recoveryAnnounced) {
+                    recoveryAnnounced = true
+                    message("저장 데이터가 손상되어 기본값으로 복구했습니다. 이전 설정·로그를 복구하지 못했으며 서비스는 OFF입니다.")
+                    try { app.settings.acknowledgeRecovery() }
+                    catch (e: CancellationException) { throw e }
+                    catch (_: Exception) { app.settings.reportRecordingFailure() }
+                }
             }
         }
-        viewModelScope.launch { app.settings.status.collect { status -> mutable.update { it.copy(status = status) } } }
-        viewModelScope.launch { app.settings.logs.collect { logs -> mutable.update { it.copy(logs = logs) } } }
+        viewModelScope.launch { app.settings.notices.filterNotNull().collect {
+            mutable.update { old -> old.copy(storageWarning = it.text) }
+            message(it.text)
+        } }
         refreshAccess()
     }
     fun refreshAccess() {
@@ -55,7 +76,13 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             localNetwork = CallAccess.hasNetworkPermission(app)) }
     }
     fun edit(config: AppConfig) { mutable.update { it.copy(draft = config, message = "") } }
-    fun message(text: String) { mutable.update { it.copy(message = text) } }
+    fun message(text: String) {
+        mutable.update { it.copy(message = text) }
+        if (text.isNotBlank()) {
+            val warning = state.value.storageWarning
+            messageChannel.trySend(if (warning.isNotBlank() && !text.contains(warning)) "$text\n$warning" else text)
+        }
+    }
     fun canRun(): Boolean {
         val current = state.value
         val error = when {
@@ -81,7 +108,9 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         val config = state.value.draft
         config.validationError()?.let { message(it); return }
         run {
-            app.settings.save(config)
+            try { app.settings.save(config) }
+            catch (e: CancellationException) { throw e }
+            catch (_: Exception) { message("설정을 저장하지 못했습니다. 저장 공간과 앱 저장소를 확인하세요."); return@run }
             mutable.update { it.copy(saved = config, draft = config, health = "미확인") }
             message("설정을 저장했습니다.")
         }
@@ -102,24 +131,19 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                     message(if (CallAccess.hasContacts(app)) "전화 수신 전달을 시작했습니다."
                         else "시작했습니다. 연락처 권한이 없어 저장된 번호의 감지가 제한됩니다.")
                 }
-                SettingsAction.HEALTH -> {
+                SettingsAction.TEST -> {
                     val started = android.os.SystemClock.elapsedRealtime()
                     try {
-                        if (!app.calls.checkHealth()) throw net.onebell.mcs.network.DeliveryFailure("PC 연결 실패: 로그의 상세 정보를 확인하세요.", false)
+                        val success = app.calls.sendEvent(CallEvent(phoneNumber = "01012345678", isTest = true))
                         val elapsed = android.os.SystemClock.elapsedRealtime() - started
-                        mutable.update { it.copy(health = "성공 · ${elapsed}ms") }
-                        message("PC 연결 성공")
-                        CallLog.event("HEALTH_CHECK_SUCCESS")
+                        mutable.update { it.copy(health = if (success) "성공 · ${elapsed}ms" else "실패") }
+                        message(if (success) "PC 연결 및 테스트 이벤트 전송 성공"
+                            else "전송에 실패하여 테스트 이벤트를 폐기했습니다. 로그의 상세 정보를 확인하세요.")
                     } catch (e: CancellationException) { throw e }
                     catch (e: Exception) {
                         mutable.update { it.copy(health = "실패") }
-                        CallLog.event("HEALTH_CHECK_FAILED")
                         throw e
                     }
-                }
-                SettingsAction.TEST -> {
-                    val success = app.calls.sendEvent(CallEvent(phoneNumber = "01012345678", isTest = true))
-                    message(if (success) "테스트 이벤트 전송 성공" else "전송에 실패하여 테스트 이벤트를 폐기했습니다.")
                 }
             }
         }
