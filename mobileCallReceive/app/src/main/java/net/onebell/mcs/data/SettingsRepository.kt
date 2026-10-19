@@ -39,6 +39,7 @@ class SettingsRepository(private val store: DataStore<Preferences>) {
     private val lastError = stringPreferencesKey("lastError")
     private val lastTest = booleanPreferencesKey("lastWasTest")
     private val deliveryLogs = stringPreferencesKey("deliveryLogs")
+    private val batteryPromptAttempted = booleanPreferencesKey("batteryOptimizationPromptAttempted")
     private val gson = Gson()
     val config = store.data.map { p ->
         val defaults = AppConfig()
@@ -67,6 +68,15 @@ class SettingsRepository(private val store: DataStore<Preferences>) {
     }
     suspend fun acknowledgeRecovery() { store.edit { it.remove(recoveredSettings) } }
     suspend fun current() = config.first()
+    /** Claim atomically before opening any external UI, including when exemption already exists. */
+    suspend fun claimBatteryOptimizationPrompt(): Boolean {
+        var first = false
+        store.edit { preferences ->
+            first = preferences[batteryPromptAttempted] != true
+            preferences[batteryPromptAttempted] = true
+        }
+        return first
+    }
     suspend fun save(value: AppConfig) {
         require(value.validationError() == null)
         store.edit { p ->

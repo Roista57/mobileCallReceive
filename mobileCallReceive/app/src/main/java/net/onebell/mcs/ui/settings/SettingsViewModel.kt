@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import net.onebell.mcs.McsApplication
+import net.onebell.mcs.R
 import net.onebell.mcs.call.CallAccess
 import net.onebell.mcs.data.DeliveryStatus
 import net.onebell.mcs.data.DeliveryLog
@@ -15,8 +16,6 @@ import net.onebell.mcs.network.networkFailure
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
 
-enum class SettingsAction { START, TEST }
-
 data class SettingsState(
     val saved: AppConfig = AppConfig(),
     val draft: AppConfig = AppConfig(),
@@ -25,6 +24,9 @@ data class SettingsState(
     val role: Boolean = false,
     val contacts: Boolean = false,
     val localNetwork: Boolean = false,
+    val batteryOptimizationIgnored: Boolean? = null,
+    val samsung: Boolean = false,
+    val setupPending: Boolean = false,
     val status: DeliveryStatus = DeliveryStatus(),
     val message: String = "",
     val storageWarning: String = "",
@@ -40,9 +42,14 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     val state = mutable.asStateFlow()
     private val messageChannel = Channel<String>(32, BufferOverflow.DROP_OLDEST)
     val messages = messageChannel.receiveAsFlow()
-    var pendingAction: SettingsAction? = null
+    internal val setupFlow = SetupFlow()
+    internal val setupRequests = setupFlow.state
+    private var setupNotice: String? = null
 
     init {
+        viewModelScope.launch { setupRequests.collect { request ->
+            mutable.update { it.copy(setupPending = request != null) }
+        } }
         viewModelScope.launch {
             var readFailed = false
             var recoveryAnnounced = false
@@ -73,7 +80,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     }
     fun refreshAccess() {
         mutable.update { it.copy(role = CallAccess.hasRole(app), contacts = CallAccess.hasContacts(app),
-            localNetwork = CallAccess.hasNetworkPermission(app)) }
+            localNetwork = CallAccess.hasNetworkPermission(app),
+            batteryOptimizationIgnored = BatterySettings.optimizationIgnored(app), samsung = BatterySettings.isSamsung) }
     }
     fun edit(config: AppConfig) { mutable.update { it.copy(draft = config, message = "") } }
     fun message(text: String) {
@@ -88,6 +96,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         val error = when {
             !current.loaded -> "설정을 불러오는 중입니다."
             current.busy -> "진행 중인 작업을 기다려 주세요."
+            setupFlow.current != null -> app.getString(R.string.setup_in_progress)
             current.dirty -> "변경한 설정을 먼저 저장하세요."
             else -> current.saved.validationError()
         }
@@ -105,6 +114,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         }
     }
     fun save() {
+        if (setupFlow.current != null) return
         val config = state.value.draft
         config.validationError()?.let { message(it); return }
         run {
@@ -115,9 +125,58 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             message("설정을 저장했습니다.")
         }
     }
-    fun stop() = run {
-        app.calls.stop()
-        message("중지했습니다.")
+    fun stop() {
+        setupFlow.cancel()
+        setupNotice = null
+        run {
+            app.calls.stop()
+            message("중지했습니다.")
+        }
+    }
+    internal fun beginSetup(action: SettingsAction) {
+        if (!canRun()) return
+        if (setupFlow.begin(action, SetupStep.ROLE)) setupNotice = null
+    }
+    internal fun openBatterySettings(samsung: Boolean = false) {
+        if (state.value.busy) return
+        if (setupFlow.begin(null, if (samsung) SetupStep.SAMSUNG else SetupStep.BATTERY)) setupNotice = null
+    }
+    internal fun setupWarning(text: String) {
+        if (setupFlow.current?.action == SettingsAction.START) setupNotice = text
+        else message(text)
+    }
+    internal fun permissionsFinished(request: SetupRequest) {
+        if (setupFlow.current != request) return
+        refreshAccess()
+        if (request.action == SettingsAction.START && !state.value.role) {
+            setupFlow.complete(request)
+            message("Call Screening 역할이 필요합니다.")
+        } else if (!state.value.localNetwork) {
+            setupFlow.complete(request)
+            message("로컬 네트워크 권한이 필요합니다. 앱 권한 설정을 확인하세요.")
+        } else setupFlow.move(request, if (request.action == SettingsAction.START) SetupStep.BATTERY_CHECK else SetupStep.EXECUTE)
+    }
+    internal fun prepareBattery(request: SetupRequest) {
+        val checking = setupFlow.move(request, SetupStep.BATTERY_CHECKING) ?: return
+        viewModelScope.launch {
+            val decision = batteryPromptDecision(app.settings::claimBatteryOptimizationPrompt) {
+                BatterySettings.optimizationIgnored(app)
+            }
+            if (setupFlow.current != checking) return@launch
+            if (decision.recordingFailed) setupWarning(app.getString(R.string.battery_prompt_record_failed))
+            refreshAccess()
+            setupFlow.move(checking,
+                if (decision.request) SetupStep.BATTERY else SetupStep.EXECUTE)
+        }
+    }
+    internal fun batterySettingsReturned(step: SetupStep) {
+        refreshAccess()
+        val request = setupFlow.externalResult(step) ?: return
+        if (request.action == SettingsAction.START) setupFlow.move(request, SetupStep.EXECUTE)
+        else setupFlow.complete(request)
+    }
+    internal fun finishSetup(request: SetupRequest) {
+        if (setupFlow.complete(request)) request.action?.let(::execute)
     }
     fun execute(action: SettingsAction) {
         refreshAccess()
@@ -128,8 +187,10 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 SettingsAction.START -> {
                     if (!CallAccess.hasRole(app)) { message("Call Screening 역할이 필요합니다."); return@run }
                     app.calls.start()
-                    message(if (CallAccess.hasContacts(app)) "전화 수신 전달을 시작했습니다."
-                        else "시작했습니다. 연락처 권한이 없어 저장된 번호의 감지가 제한됩니다.")
+                    val result = if (CallAccess.hasContacts(app)) "전화 수신 전달을 시작했습니다."
+                        else "시작했습니다. 연락처 권한이 없어 저장된 번호의 감지가 제한됩니다."
+                    message(listOfNotNull(result, setupNotice).joinToString("\n"))
+                    setupNotice = null
                 }
                 SettingsAction.TEST -> {
                     val started = android.os.SystemClock.elapsedRealtime()

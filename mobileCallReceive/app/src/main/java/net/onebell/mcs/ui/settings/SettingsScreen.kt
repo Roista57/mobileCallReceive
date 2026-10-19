@@ -17,9 +17,10 @@ import java.time.format.DateTimeFormatter
 
 @Composable
 fun SettingsScreen(state: SettingsState, viewModel: SettingsViewModel,
-    onAction: (SettingsAction) -> Unit, onPermissions: () -> Unit) {
+    onAction: (SettingsAction) -> Unit, onPermissions: () -> Unit,
+    onBatterySettings: () -> Unit, onSamsungSettings: () -> Unit) {
     val config = state.draft
-    val usable = state.loaded && !state.busy
+    val usable = state.loaded && !state.busy && !state.setupPending
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Card(Modifier.fillMaxWidth()) {
@@ -27,6 +28,11 @@ fun SettingsScreen(state: SettingsState, viewModel: SettingsViewModel,
                 Text("서비스 사용: ${if (state.saved.enabled) "ON" else "OFF"}")
                 Text("Call Screening 역할: ${if (state.role) "허용됨" else "없음"}")
                 Text("연락처 권한: ${if (state.contacts) "허용됨" else "없음 · 등록 번호 감지 제한"}")
+                Text(stringResource(R.string.battery_optimization_status, stringResource(when (state.batteryOptimizationIgnored) {
+                    true -> R.string.battery_optimization_ignored
+                    false -> R.string.battery_optimization_applied
+                    null -> R.string.battery_optimization_unknown
+                })))
                 Text("PC 연결: ${state.health}")
                 Text("마지막 전송: ${koreaTime(state.status.lastSent)}")
                 if (state.status.lastWasTest && state.status.lastSent.isNotEmpty()) Text("테스트 이벤트 전송 성공")
@@ -43,11 +49,16 @@ fun SettingsScreen(state: SettingsState, viewModel: SettingsViewModel,
         Button(viewModel::save, enabled = usable, modifier = Modifier.fillMaxWidth()) { Text("저장") }
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Button({ onAction(SettingsAction.START) }, enabled = usable, modifier = Modifier.weight(1f)) { Text("시작") }
-            OutlinedButton(viewModel::stop, enabled = usable, modifier = Modifier.weight(1f)) { Text("중지") }
+            OutlinedButton(viewModel::stop, enabled = state.loaded && !state.busy, modifier = Modifier.weight(1f)) { Text("중지") }
         }
         OutlinedButton({ onAction(SettingsAction.TEST) }, enabled = usable, modifier = Modifier.fillMaxWidth()) { Text("테스트 전화 이벤트 전송") }
         if (state.busy) LinearProgressIndicator(Modifier.fillMaxWidth())
-        TextButton(onPermissions) { Text("앱 권한 설정 열기") }
+        TextButton(onPermissions, enabled = usable) { Text("앱 권한 설정 열기") }
+        TextButton(onBatterySettings, enabled = usable) { Text(stringResource(R.string.open_battery_settings)) }
+        if (state.samsung) {
+            TextButton(onSamsungSettings, enabled = usable) { Text(stringResource(R.string.open_samsung_battery_settings)) }
+            Text(stringResource(R.string.samsung_battery_guide))
+        }
         Text(stringResource(R.string.quick_guide_title), style = MaterialTheme.typography.titleSmall)
         Text(stringResource(R.string.quick_guide_body))
     }
