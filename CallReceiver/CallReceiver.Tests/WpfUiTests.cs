@@ -131,7 +131,7 @@ public sealed class WpfUiTests
             Assert.Equal(timeSize == 0 ? Visibility.Collapsed : Visibility.Visible, time.Visibility);
             if (phoneSize != 0) Assert.Equal(TextAlignment.Center, phone.TextAlignment);
             if (timeSize != 0) Assert.Equal(TextAlignment.Right, time.TextAlignment);
-            Assert.Equal("01012345678", phone.Text);
+            Assert.Equal("010-1234-5678", phone.Text);
             Assert.StartsWith("시각 > ", time.Text);
             Assert.Equal(1 + (phoneSize > 0 ? 2 : 0) + (timeSize > 0 ? 2 : 0), grid.RowDefinitions.Count);
             Assert.Null(popup.FindName("ServerText"));
@@ -207,7 +207,7 @@ public sealed class WpfUiTests
             Assert.Equal(expectedTitle, ((System.Windows.Controls.TextBlock)popup.FindName("TitleText")).Text);
             var numberText = (System.Windows.Controls.TextBlock)popup.FindName("NumberText");
             var timeText = (System.Windows.Controls.TextBlock)popup.FindName("TimeText");
-            Assert.Equal($"전화번호: {received.PhoneNumber}", numberText.Text);
+            Assert.Equal("전화번호: 010-1234-5678", numberText.Text);
             Assert.Equal($"수신시간: {received.ReceivedAt.ToLocalTime():yyyy.MM.dd HH:mm:ss}", timeText.Text);
             Assert.Equal(18, numberText.FontSize);
             Assert.Equal(System.Windows.FontWeights.Normal, numberText.FontWeight);
@@ -236,7 +236,10 @@ public sealed class WpfUiTests
             await WaitUntil(() => OpenWindows<CallPopupWindow>().Length == 1);
             popup = Assert.Single(OpenWindows<CallPopupWindow>());
             Assert.False(popup.Topmost);
-            Assert.Equal("전화번호: 0212345678", ((System.Windows.Controls.TextBlock)popup.FindName("NumberText")).Text);
+            Assert.Equal("전화번호: 02-1234-5678", ((System.Windows.Controls.TextBlock)popup.FindName("NumberText")).Text);
+            Assert.EndsWith(" 0212345678", popup.Title);
+            Assert.Equal(popup.Title, ((System.Windows.Controls.TextBlock)popup.FindName("TitleText")).Text);
+            Assert.Equal("0212345678", model.TestPhoneNumber);
             Assert.Contains("TITLE", popup.Title);
             Assert.Contains("BODY", ((System.Windows.Controls.TextBlock)popup.FindName("TimeText")).Text);
             Assert.False(model.TitleChoices1.Single(c => c.Id == "Time").IsEnabled);

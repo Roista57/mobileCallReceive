@@ -96,7 +96,8 @@ class MainActivity : ComponentActivity() {
             SetupStep.ROLE -> requestRoleForPending(request)
             SetupStep.PERMISSIONS -> requestPermissionsForPending(request)
             SetupStep.BATTERY_CHECK -> viewModel.prepareBattery(request)
-            SetupStep.BATTERY_CHECKING -> Unit
+            SetupStep.SAMSUNG_CHECK -> viewModel.prepareSamsung(request)
+            SetupStep.BATTERY_CHECKING, SetupStep.SAMSUNG_CHECKING -> Unit
             SetupStep.BATTERY, SetupStep.SAMSUNG -> openBatterySettings(request)
             SetupStep.EXECUTE -> viewModel.finishSetup(request)
         }
@@ -134,8 +135,8 @@ class MainActivity : ComponentActivity() {
     }
     private fun openBatterySettings(request: SetupRequest) {
         val ignored = BatterySettings.optimizationIgnored(this)
-        if (request.action == SettingsAction.START && ignored == true) {
-            viewModel.setupFlow.move(request, SetupStep.EXECUTE)
+        if (request.action == SettingsAction.START && request.step == SetupStep.BATTERY && ignored == true) {
+            viewModel.setupFlow.move(request, SetupStep.SAMSUNG_CHECK)
             return
         }
         val waiting = viewModel.setupFlow.awaitExternal(request) ?: return
@@ -148,7 +149,7 @@ class MainActivity : ComponentActivity() {
                 if (samsung) getString(R.string.samsung_battery_manual_path) else null).joinToString("\n"))
             viewModel.batterySettingsReturned(waiting.step)
         } else if (samsung && destination != BatteryDestination.SAMSUNG_EXCEPTIONS) {
-            viewModel.message(getString(R.string.samsung_battery_manual_path))
+            viewModel.setupWarning(getString(R.string.samsung_battery_manual_path))
         }
     }
     private fun openAppSettings() {

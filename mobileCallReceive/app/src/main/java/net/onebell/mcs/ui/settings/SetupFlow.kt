@@ -4,7 +4,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 enum class SettingsAction { START, TEST }
-internal enum class SetupStep { ROLE, PERMISSIONS, BATTERY_CHECK, BATTERY_CHECKING, BATTERY, SAMSUNG, EXECUTE }
+internal enum class SetupStep {
+    ROLE, PERMISSIONS, BATTERY_CHECK, BATTERY_CHECKING, BATTERY,
+    SAMSUNG_CHECK, SAMSUNG_CHECKING, SAMSUNG, EXECUTE
+}
 internal data class SetupRequest(val id: Long, val action: SettingsAction?, val step: SetupStep,
     val waiting: Boolean = false, val cancelled: Boolean = false)
 
@@ -33,6 +36,12 @@ internal class SetupFlow {
         if (request.step != step || !request.waiting) return null
         if (request.cancelled) { mutable.value = null; return null }
         return request
+    }
+    fun settingsReturned(step: SetupStep) {
+        val request = externalResult(step) ?: return
+        if (request.action == SettingsAction.START) move(request,
+            if (step == SetupStep.BATTERY) SetupStep.SAMSUNG_CHECK else SetupStep.EXECUTE)
+        else complete(request)
     }
     fun complete(expected: SetupRequest): Boolean {
         if (current != expected) return false

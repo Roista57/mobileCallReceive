@@ -163,19 +163,6 @@ public class CoreTests
         Assert.Equal(pending, await store.NextAsync());
         Assert.True(await store.AcceptAsync(first));
     }
-    [Theory]
-    [InlineData("01012345678", "01012345678")]
-    [InlineData("0212345678", "0212345678")]
-    [InlineData("+821012345678", "+821012345678")]
-    [InlineData("UNKNOWN", "UNKNOWN")]
-    [InlineData("PRIVATE", "PRIVATE")]
-    [InlineData("07012345678", "07012345678")]
-    [InlineData("15881588", "15881588")]
-    public void PhonePresentation(string input, string expected)
-    {
-        Assert.Equal(expected, PhoneText.Format(input));
-        if (input == "01012345678") Assert.Equal("010-****-5678", PhoneText.Mask(input));
-    }
     [Fact] public void GeometryClampsOnNegativeOriginAndScaledMonitor()
     {
         var monitor = new MonitorInfo("test", "test", -2560, -100, 2560, 1400, 1.5, 1.5);

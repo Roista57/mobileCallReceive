@@ -19,6 +19,10 @@ internal suspend fun batteryPromptDecision(claim: suspend () -> Boolean, ignored
     return BatteryPromptDecision(first && ignored() != true)
 }
 
+// Android's exemption state cannot establish membership in Samsung's separate list.
+internal suspend fun samsungPromptDecision(samsung: Boolean, claim: suspend () -> Boolean): BatteryPromptDecision =
+    if (samsung) batteryPromptDecision(claim) { false } else BatteryPromptDecision(false)
+
 internal fun batteryDestinations(samsung: Boolean, ignored: Boolean?): List<BatteryDestination> =
     if (samsung) listOf(BatteryDestination.SAMSUNG_EXCEPTIONS, BatteryDestination.APP_DETAILS)
     else buildList {

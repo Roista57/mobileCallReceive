@@ -39,7 +39,31 @@ public sealed record CallEvent(int SchemaVersion, string EventId, string PhoneNu
 
 public static class PhoneText
 {
-    public static string Format(string number) => number;
+    // Presentation only: captions, stored events and logs retain the received value.
+    public static string Format(string number)
+    {
+        if (number.Length is < 8 or > 12 || number.Any(c => c is < '0' or > '9')) return number;
+        if (number.Length == 8 && number[..2] is "15" or "16" or "18")
+            return $"{number[..4]}-{number[4..]}";
+
+        var prefixLength = number switch
+        {
+            _ when number.StartsWith("02", StringComparison.Ordinal) && number.Length is 9 or 10 => 2,
+            _ => number[..3] switch
+            {
+                "010" or "070" when number.Length == 11 => 3,
+                "011" or "016" or "017" or "018" or "019" or
+                "031" or "032" or "033" or "041" or "042" or "043" or "044" or
+                "051" or "052" or "053" or "054" or "055" or "061" or "062" or "063" or "064"
+                    when number.Length is 10 or 11 => 3,
+                "050" when number.Length == 11 => 3,
+                "050" when number.Length == 12 => 4,
+                "060" or "080" when number.Length == 10 => 3,
+                _ => 0
+            }
+        };
+        return prefixLength == 0 ? number : $"{number[..prefixLength]}-{number[prefixLength..^4]}-{number[^4..]}";
+    }
     public static string Mask(string number) => number is "UNKNOWN" or "PRIVATE" ? number :
         number.Length > 7 ? $"{number[..3]}-****-{number[^4..]}" : "****";
 }

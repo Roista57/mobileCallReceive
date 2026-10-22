@@ -142,7 +142,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         if (setupFlow.begin(null, if (samsung) SetupStep.SAMSUNG else SetupStep.BATTERY)) setupNotice = null
     }
     internal fun setupWarning(text: String) {
-        if (setupFlow.current?.action == SettingsAction.START) setupNotice = text
+        if (setupFlow.current?.action == SettingsAction.START)
+            setupNotice = listOfNotNull(setupNotice, text).distinct().joinToString("\n")
         else message(text)
     }
     internal fun permissionsFinished(request: SetupRequest) {
@@ -166,14 +167,21 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             if (decision.recordingFailed) setupWarning(app.getString(R.string.battery_prompt_record_failed))
             refreshAccess()
             setupFlow.move(checking,
-                if (decision.request) SetupStep.BATTERY else SetupStep.EXECUTE)
+                if (decision.request) SetupStep.BATTERY else SetupStep.SAMSUNG_CHECK)
+        }
+    }
+    internal fun prepareSamsung(request: SetupRequest) {
+        val checking = setupFlow.move(request, SetupStep.SAMSUNG_CHECKING) ?: return
+        viewModelScope.launch {
+            val decision = samsungPromptDecision(BatterySettings.isSamsung, app.settings::claimSamsungBatteryPrompt)
+            if (setupFlow.current != checking) return@launch
+            if (decision.recordingFailed) setupWarning(app.getString(R.string.samsung_prompt_record_failed))
+            setupFlow.move(checking, if (decision.request) SetupStep.SAMSUNG else SetupStep.EXECUTE)
         }
     }
     internal fun batterySettingsReturned(step: SetupStep) {
         refreshAccess()
-        val request = setupFlow.externalResult(step) ?: return
-        if (request.action == SettingsAction.START) setupFlow.move(request, SetupStep.EXECUTE)
-        else setupFlow.complete(request)
+        setupFlow.settingsReturned(step)
     }
     internal fun finishSetup(request: SetupRequest) {
         if (setupFlow.complete(request)) request.action?.let(::execute)

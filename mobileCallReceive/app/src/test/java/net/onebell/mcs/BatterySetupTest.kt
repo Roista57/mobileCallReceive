@@ -154,4 +154,104 @@ class BatterySetupTest {
         assertNull(flow.move(checking, SetupStep.BATTERY))
         assertNull(SetupFlow().current)
     }
+
+    @Test fun samsungFirstClaimIsIndependentAtomicAndPersistsAfterReopening() = runBlocking {
+        val file = directory.root.resolve("samsung.preferences_pb")
+        var job = SupervisorJob()
+        try {
+            var settings = SettingsRepository(store(file, job))
+            settings.save(AppConfig(serverIp = "192.168.0.50"))
+            settings.setEnabled(true)
+            // Existing installations have already completed the Android step.
+            assertTrue(settings.claimBatteryOptimizationPrompt())
+            assertEquals(1, (1..20).map { async { settings.claimSamsungBatteryPrompt() } }.awaitAll().count { it })
+            job.cancelAndJoin()
+            job = SupervisorJob()
+            settings = SettingsRepository(store(file, job))
+            assertFalse(settings.claimSamsungBatteryPrompt())
+            assertFalse(settings.claimBatteryOptimizationPrompt())
+            assertTrue(settings.current().enabled)
+            assertEquals("192.168.0.50", settings.current().serverIp)
+        } finally { job.cancelAndJoin() }
+    }
+
+    @Test fun samsungClaimDoesNotConsumeAndroidClaimOrEnableService() = runBlocking {
+        val job = SupervisorJob()
+        try {
+            val settings = SettingsRepository(store(directory.root.resolve("separate.preferences_pb"), job))
+            assertTrue(settings.claimSamsungBatteryPrompt())
+            assertTrue(settings.claimBatteryOptimizationPrompt())
+            assertFalse(settings.current().enabled)
+        } finally { job.cancelAndJoin() }
+    }
+
+    @Test fun nonSamsungSkipsClaimAndSamsungOnlyPromptsOnce() = runBlocking {
+        var claims = 0
+        suspend fun claim(): Boolean = (++claims == 1)
+        assertFalse(samsungPromptDecision(false, ::claim).request)
+        assertEquals(0, claims)
+        assertTrue(samsungPromptDecision(true, ::claim).request)
+        assertFalse(samsungPromptDecision(true, ::claim).request)
+        assertEquals(BatteryDestination.SAMSUNG_EXCEPTIONS, batteryDestinations(true, true).first())
+    }
+
+    @Test fun samsungRecordingFailureSkipsAutomaticScreenButDoesNotSwallowCancellation() = runBlocking {
+        val decision = samsungPromptDecision(true) { throw IOException("disk") }
+        assertFalse(decision.request)
+        assertTrue(decision.recordingFailed)
+        try {
+            samsungPromptDecision(true) { throw CancellationException("cancelled") }
+            fail("Expected cancellation")
+        } catch (_: CancellationException) { }
+    }
+
+    @Test fun androidReturnContinuesToSamsungAndSamsungReturnCompletesOnce() {
+        // Activity result codes are deliberately not inputs: approval and denial share this route.
+        repeat(2) {
+            val flow = SetupFlow()
+            flow.begin(SettingsAction.START, SetupStep.BATTERY)
+            flow.awaitExternal(flow.current!!)
+            flow.settingsReturned(SetupStep.BATTERY)
+            assertEquals(SetupStep.SAMSUNG_CHECK, flow.current!!.step)
+            val checking = flow.move(flow.current!!, SetupStep.SAMSUNG_CHECKING)!!
+            val samsung = flow.move(checking, SetupStep.SAMSUNG)!!
+            flow.awaitExternal(samsung)
+            flow.settingsReturned(SetupStep.BATTERY) // stale Android result cannot skip Samsung
+            assertEquals(SetupStep.SAMSUNG, flow.current!!.step)
+            flow.settingsReturned(SetupStep.SAMSUNG)
+            assertEquals(SetupStep.EXECUTE, flow.current!!.step)
+            val execute = flow.current!!
+            flow.settingsReturned(SetupStep.SAMSUNG)
+            assertEquals(execute, flow.current)
+            assertTrue(flow.complete(execute))
+            assertFalse(flow.complete(execute))
+        }
+    }
+
+    @Test fun manualSamsungReturnCompletesWithoutStartAndCancelledStartStaysCancelled() {
+        val flow = SetupFlow()
+        flow.begin(null, SetupStep.SAMSUNG)
+        flow.awaitExternal(flow.current!!)
+        flow.settingsReturned(SetupStep.SAMSUNG)
+        assertNull(flow.current)
+        flow.begin(SettingsAction.START, SetupStep.SAMSUNG)
+        flow.awaitExternal(flow.current!!)
+        flow.cancel()
+        assertFalse(flow.begin(SettingsAction.START, SetupStep.ROLE))
+        flow.settingsReturned(SetupStep.SAMSUNG)
+        assertNull(flow.current)
+        flow.begin(SettingsAction.START, SetupStep.ROLE)
+        flow.settingsReturned(SetupStep.SAMSUNG)
+        assertEquals(SetupStep.ROLE, flow.current!!.step)
+    }
+
+    @Test fun stopDuringSamsungClaimAndNewProcessCannotResumePendingStart() {
+        val flow = SetupFlow()
+        flow.begin(SettingsAction.START, SetupStep.SAMSUNG_CHECK)
+        val checking = flow.move(flow.current!!, SetupStep.SAMSUNG_CHECKING)!!
+        flow.cancel()
+        flow.begin(SettingsAction.START, SetupStep.ROLE)
+        assertNull(flow.move(checking, SetupStep.SAMSUNG))
+        assertNull(SetupFlow().current)
+    }
 }
